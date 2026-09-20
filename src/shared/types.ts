@@ -85,10 +85,28 @@ export type Grid = number[][];
 
 /**
  * 问题类型判别值。
- * 注意：公开文档里叫 "noul"，但 API 层实际接受的是 "boolean"。
- * 实测错误信息：Expected 'boolean' | 'choice' | 'score'
+ *
+ * ⚠ **各网关的取值不一致**，实测结论：
+ *
+ *   TypeSafe 官方   noul | choice | score
+ *   OpenRouter      noul | choice | score
+ *   AI/ML API       noul | choice | score
+ *   Vercel Gateway  boolean | choice | score   ← 唯一的异类
+ *
+ * Vercel 自己封装时把 `noul` 改名成了 `boolean`。所以「文档写 noul、
+ * API 实际叫 boolean」这句话**只对 Vercel 成立** —— 它一度被误当成通例。
+ *
+ * `choice` 与 `score` 四家一致，而本项目的 best_move 走的就是 choice，
+ * 所以主流程不受影响。将来若要加布尔类型的问题，必须按后端取判别值。
  */
-export type QuestionType = "boolean" | "choice" | "score";
+export type NoulType = "noul" | "boolean";
+export type QuestionType = NoulType | "choice" | "score";
+
+/** 某后端下布尔类型的实际判别值 */
+export function noulDiscriminator(backend: string): NoulType {
+  // Vercel 的封装使用了 boolean，其余（官方 / OpenRouter / AI-ML-API）都是 noul
+  return backend === "vercel" ? "boolean" : "noul";
+}
 
 /** choice 的 criteria 是 map；score 是有序数组；boolean 是 {true,false} */
 export type Criteria =
@@ -114,10 +132,19 @@ export interface ChoiceAnswer {
   confidence: number;
 }
 
+/**
+ * 布尔答案。字段名随网关变化：
+ *   Vercel             {"type":"boolean","probability":0.69}
+ *   OpenRouter / 官方   {"type":"noul","noul":0.96}
+ * 两者都是 0~1 的概率，语义相同，只是键名不同。
+ * 注意：**没有 confidence 字段** —— 概率本身就是置信度。
+ */
 export interface BooleanAnswer {
-  type: "boolean";
-  probability: number;
-  /** boolean 类型没有 confidence 字段 */
+  type: NoulType;
+  /** Vercel 用这个键 */
+  probability?: number;
+  /** OpenRouter / 官方用这个键 */
+  noul?: number;
 }
 
 export interface ScoreAnswer {
@@ -128,6 +155,11 @@ export interface ScoreAnswer {
 }
 
 export type Answer = ChoiceAnswer | BooleanAnswer | ScoreAnswer;
+
+/** 从布尔答案里取概率 —— 两家键名不同，统一在这里抹平 */
+export function noulProbability(a: BooleanAnswer): number {
+  return a.noul ?? a.probability ?? 0;
+}
 
 export interface JevRequest {
   model: string;

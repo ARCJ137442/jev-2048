@@ -190,25 +190,31 @@ node --test dist-test/test/*.test.js                          # 66 项
  not a language model. Use the evaluation generation API instead."}}
 ```
 
-### ⚠ 两个网关的命名差异
+### ⚠ 各家网关的命名差异（最容易踩的坑）
 
-同一个 Jev、同一份 SystemOne 协议，两家网关做了**不同的命名选择**：
+同一个 Jev、同一份 SystemOne 协议，各家做了**不同的命名选择**：
 
-| | Vercel AI Gateway | OpenRouter |
-|---|---|---|
-| 端点 | `/v1/evaluate` | `/api/v1/systemone` |
-| 模型 ID | `typesafe-ai/jev` | `typesafe/jev-1.13` |
-| 布尔类型判别值 | `boolean` | **`noul`** |
-| 布尔答案字段 | `{"type":"boolean","probability":0.69}` | `{"type":"noul","noul":0.96}` |
-| usage 字段 | `inputTokens` | `input_tokens` |
+| | TypeSafe 官方 | OpenRouter | AI/ML API | Vercel Gateway |
+|---|---|---|---|---|
+| 端点 | `/v1/systemone` | `/api/v1/systemone` | `/v1/decisions` | `/v1/evaluate` |
+| 模型 ID | `jev-latest` | `typesafe/jev-1.13` | `typesafe/jev` | `typesafe-ai/jev` |
+| **布尔判别值** | `noul` | `noul` | `noul` | **`boolean`** |
+| 布尔答案键 | `noul` | `noul` | `noul` | `probability` |
+| usage 字段 | `input_tokens` | `input_tokens` | `input_tokens` | `inputTokens` |
 
-**不要想当然地套用另一家的写法。** 传错判别值会被 400 拒绝，
-错误原文：`Invalid discriminator value. Expected 'noul' | 'choice' | 'score'`。
+**Vercel 是唯一的异类** —— 它自己封装时把 `noul` 改名成了 `boolean`。
 
-`choice` 与 `score` 两家的结构一致，所以本项目的主流程（`best_move` 走 choice）不受影响。
+> 这条曾经被搞反：早期文档写「公开文档说 noul、API 实际叫 boolean」，
+> 那是**把 Vercel 的特例当成了通例**。官方公开的 `openapi.json`（v0.2.0）
+> 确认官方用 `noul`，OpenRouter 与 AI/ML API 与之一致。
 
-> OpenRouter 上 `typesafe/jev-latest` 与 `typesafe-ai/jev` 都会报「模型不存在」，
-> 必须用版本化的 `typesafe/jev-1.13`。
+`choice` 与 `score` 四家完全一致，所以本项目主流程（`best_move` 走 choice）不受影响。
+
+**TypeSafe 官方只有两个端点**：`POST /v1/systemone`（唯一决策端点）与 `GET /v1/models`。
+`/v1/evaluate`、`/v1/decisions` 在官方都是 404。
+
+> OpenRouter 上 `typesafe/jev-latest`（无波浪号）与 `typesafe-ai/jev` 都会报「模型不存在」，
+> 用版本化的 `typesafe/jev-1.13`；裸 ID `jev-1.13` 会被自动映射进 `typesafe/` 命名空间。
 
 ### 响应结构
 

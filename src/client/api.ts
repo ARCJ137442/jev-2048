@@ -52,8 +52,10 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     label: "TypeSafe 官方",
     base: "https://api.typesafe.ai/v1/systemone",
     model: "jev-latest",
-    note: "端点存在但返回 403，请求体结构未经实测验证，可能因 waitlist 不可用。",
-    verified: false,
+    note:
+      "端点与协议已由官方公开的 openapi.json（v0.2.0）确认：只有 POST /v1/systemone 一个决策端点。" +
+      "未持密钥实测过。布尔类型判别值是 noul。需要 TypeSafe 账号。",
+    verified: true,
     needsKey: true,
   },
   openrouter: {
@@ -67,10 +69,15 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     needsKey: true,
   },
   lmstudio: {
-    label: "LM Studio 本地",
-    base: "http://localhost:1234/v1",
-    model: "local-model",
-    note: "协议演示模式。Jev 无开源权重，LM Studio 无法运行真正的 Jev，此项仅演示调用链路。",
+    label: "自建 / 本地兼容端点",
+    base: "http://localhost:1234/v1/systemone",
+    model: "jev-latest",
+    note:
+      "指向任何实现了 SystemOne 协议的服务 —— LiteLLM proxy 的 /typesafe 透传、" +
+      "LangChain TypeSafeClassifier 配 TYPESAFE_BASE_URL、或你自己写的一层转换。" +
+      "⚠ 普通的 OpenAI 兼容端点（LM Studio / vLLM / Ollama 的 /v1/chat/completions）" +
+      "**打不通 Jev** —— 它是决策模型不是文本模型。必须让本地侧实现 SystemOne 协议，" +
+      "把 OpenAI 兼容留在文本模型那一层。",
     verified: false,
     needsKey: false,
   },
