@@ -73,7 +73,7 @@ Once started, the terminal prints the addresses:
 
 ```plaintext
 Local      http://localhost:8787/
-LAN        http://192.168.41.151:8787/
+LAN        http://<你的局域网IP>:8787/
 ```
 
 ### Providing a key

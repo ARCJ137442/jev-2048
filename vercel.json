@@ -7,12 +7,21 @@
     "api/evaluate.ts": {
       "memory": 256,
       "maxDuration": 60
+    },
+    "api/evaluate2.ts": {
+      "memory": 256,
+      "maxDuration": 60
     }
   },
   "headers": [
     {
       "source": "/api/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
     }
   ]
 }

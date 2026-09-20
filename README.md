@@ -81,7 +81,7 @@ npm install
 
 ```plaintext
 本机访问   http://localhost:8787/
-局域网访问 http://192.168.41.151:8787/
+局域网访问 http://<你的局域网IP>:8787/
 ```
 
 ### 提供密钥
