@@ -64,7 +64,7 @@ npm install
 
 ```plaintext
 ▸ Check DOM id consistency…   tools/check-dom.ts
-▸ Run unit tests…             73 tests
+▸ Run unit tests…             76 tests
 ▸ Compile client / server…
 ▸ Start server…
 ```
@@ -145,11 +145,12 @@ jev-2048
 │   │   └── seal.ts:        Key sealing (AES-256-GCM)
 │   └── test
 │       ├── engine.test.ts:  49 tests — rules / purity / axis alignment / rect boards
-│       ├── archive.test.ts: 17 tests — archive validation and extraction
+│       ├── archive.test.ts: 20 tests — archive validation, extraction, pace bounds
 │       └── seal.test.ts:     7 tests — seal round-trip and safe failure
 ├── api:                    Vercel Serverless Functions (free-trial backends)
 ├── tools
 │   ├── check-dom.ts:       Build-time DOM id consistency check
+│   ├── scan-secrets.ts:    Secret scan (byte-wise + zlib-inflate rescan)
 │   └── seal-key.ts:        Plaintext key → ciphertext
 ├── public:                 Single-page UI + build output
 ├── DESIGN.md:              Design decision record (handoff; the "why")

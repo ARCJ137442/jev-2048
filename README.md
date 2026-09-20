@@ -72,7 +72,7 @@ npm install
 
 ```plaintext
 ▸ 检查 DOM id 一致性…     tools/check-dom.ts
-▸ 运行单元测试…           73 项
+▸ 运行单元测试…           76 项
 ▸ 编译客户端 / 服务器…
 ▸ 启动服务器…
 ```
@@ -160,11 +160,12 @@ jev-2048
 │   │   └── seal.ts:        密钥封存（AES-256-GCM）
 │   └── test
 │       ├── engine.test.ts:  49 项 —— 引擎规则 / 纯度 / 轴对齐 / 矩形棋盘
-│       ├── archive.test.ts: 17 项 —— 存档校验与提取
+│       ├── archive.test.ts: 20 项 —— 存档校验、提取、步进间隔边界
 │       └── seal.test.ts:     7 项 —— 密钥封存往返与安全失败
 ├── api:                    Vercel Serverless Functions（免费试用后端）
 ├── tools
 │   ├── check-dom.ts:       构建期 DOM id 一致性检查
+│   ├── scan-secrets.ts:    密钥扫描（按字节读 + zlib 解压复扫）
 │   └── seal-key.ts:        明文密钥 → 密文
 ├── public:                 单页界面 + 编译产物
 ├── DESIGN.md:              设计决策记录（交接用，记录「为什么」）
