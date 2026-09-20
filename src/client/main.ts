@@ -33,9 +33,23 @@ import {
   clearSession,
   loadSession,
   maxTileId,
+  rawSession,
+  SESSION_VERSION,
   saveSession,
   saveSessionNow,
+  type Session,
+  type SessionInput,
 } from "./session.js";
+import {
+  ArchiveError,
+  buildArchive,
+  download,
+  downloadRaw,
+  extract,
+  parseArchive,
+  readFile,
+  type ArchiveKind,
+} from "./archive.js";
 import { trajectoryCells, countEmpty, maxInCorner, monotonicity } from "./metrics.js";
 import {
   BACKENDS,
@@ -603,23 +617,8 @@ function gameOver(): void {
 
 /* ═══════════ 控制 ═══════════ */
 
-/**
- * 尝试从 localStorage 还原上一局。
- *
- * 只在存档的棋盘尺寸与当前设置一致、且该局尚未结束时才还原 ——
- * 换过尺寸或已经结束的存档直接作废并清掉，避免出现「4×4 的棋盘配 8×8 的纪录」这种错位。
- *
- * @returns 是否成功还原
- */
-function restoreSession(): boolean {
-  const s = loadSession();
-  if (!s) return false;
-
-  if (s.size !== SIZE || s.finished || s.tiles.length === 0) {
-    clearSession();
-    return false;
-  }
-
+/** 把一份 Session 应用到界面上 */
+function applySession(s: Session): void {
   state.tiles = s.tiles;
   state.score = s.score;
   state.turn = s.turn;
@@ -644,7 +643,38 @@ function restoreSession(): boolean {
   $("decision").innerHTML = `<div class="idle">已恢复上一局（第 ${state.turn} 手）</div>`;
   $("dTurn").textContent = state.turn ? `#${state.turn}` : "";
   syncRunButton();
-  setLed("", `已恢复上一局 · 第 ${state.turn} 手`);
+}
+
+/**
+ * 尝试从 localStorage 还原上一局。
+ *
+ * 三种结果分别对待：
+ *   ok            正常还原
+ *   none          没有存档 → 开新局
+ *   incompatible  磁盘上有数据但读不懂 → **不静默丢弃**，弹框让玩家
+ *                 选择「导出旧数据」还是「重置回默认」
+ *
+ * @returns 是否成功还原
+ */
+function restoreSession(): boolean {
+  const r = loadSession();
+
+  if (r.status === "none") return false;
+
+  if (r.status === "incompatible") {
+    showIncompatibleModal(r.raw, r.reason);
+    return false;
+  }
+
+  const s = r.session;
+  // 尺寸对不上或该局已结束 —— 这类是「正常的作废」，不必打扰玩家
+  if (s.size !== SIZE || s.finished || s.tiles.length === 0) {
+    clearSession();
+    return false;
+  }
+
+  applySession(s);
+  setLed("", `已恢复上一局 · 第 ${s.turn} 手`);
   return true;
 }
 
@@ -860,8 +890,8 @@ async function copyText(text: string, btn: HTMLButtonElement): Promise<void> {
 /* ═══════════ 抽屉 ═══════════ */
 
 const scrim = $("scrim");
-/** 呈现顺序即此数组顺序：游戏 → 策略 → API → 日志 */
-const DRAWERS = ["dGame", "dStrategy", "dApi", "dLog"];
+/** 呈现顺序即此数组顺序：存档 → 游戏 → 策略 → API → 日志 */
+const DRAWERS = ["dArchive", "dGame", "dStrategy", "dApi", "dLog"];
 
 function openDrawer(id: string): void {
   for (const d of DRAWERS) $(d).classList.toggle("show", d === id);
@@ -993,6 +1023,205 @@ function bindContextSettings(): void {
     $(id).addEventListener("change", apply);
     $(id).addEventListener("input", apply);
   }
+}
+
+/* ═══════════ 存档：导入导出 ═══════════ */
+
+/** 当前对局的快照（不含 savedAt），供导出使用 */
+function sessionSnapshot(): SessionInput | null {
+  if (state.turn === 0 && state.history.length === 0) return null;
+  return {
+    size: SIZE,
+    tiles: state.tiles,
+    score: state.score,
+    turn: state.turn,
+    memory: state.memory,
+    history: state.history,
+    finished: false,
+  };
+}
+
+function doExport(kind: ArchiveKind, label: string): void {
+  download(buildArchive(kind, store, sessionSnapshot(), state.history), label);
+  toast(`已导出${label}`);
+}
+
+/** 顶部短暂提示。导出/导入这类操作需要即时反馈，但不值得弹框。 */
+let toastTimer = 0;
+function toast(msg: string, isErr = false): void {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.toggle("err", isErr);
+  el.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+/** 触发文件选择，选完交给 handler */
+let pendingImport: ((text: string) => void) | null = null;
+
+function pickFile(handler: (text: string) => void): void {
+  pendingImport = handler;
+  $<HTMLInputElement>("fileInput").click();
+}
+
+function onFileChosen(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";                       // 允许连续选同一个文件
+  if (!file || !pendingImport) return;
+  const handler = pendingImport;
+  pendingImport = null;
+
+  readFile(file)
+    .then(handler)
+    .catch((err: unknown) => toast(`读取失败：${(err as Error).message}`, true));
+}
+
+/**
+ * 应用导入的档案。
+ *
+ * 各类档案的作用范围严格按「它自己声称的类型」来 —— 策略档不会顺带改掉棋盘设置，
+ * API 档也不会碰密钥。
+ */
+function applyImported(text: string, expect: ArchiveKind): void {
+  try {
+    const archive = parseArchive(text);
+    const r = extract(archive);
+
+    // 类型不匹配时给出明确提示，但仍允许 all 档写入任何一类
+    if (archive.kind !== expect && archive.kind !== "all") {
+      throw new ArchiveError(
+        `这是一份「${archive.kind}」档案，不能导入到「${expect}」位置`,
+      );
+    }
+
+    const touched: string[] = [];
+
+    if (r.game) {
+      // 策略档里的 game 只含 strategy/threshold/memory，按字段逐个合并
+      if (expect === "game") Object.assign(store.game, r.game);
+      else {
+        if (r.game.strategy !== undefined) store.game.strategy = r.game.strategy;
+        if (r.game.threshold !== undefined) store.game.threshold = r.game.threshold;
+        if (r.game.memory !== undefined) store.game.memory = r.game.memory;
+      }
+      touched.push("游戏设置");
+    }
+    if (r.context) {
+      Object.assign(store.context, r.context);
+      $<HTMLTextAreaElement>("ruleDesc").value = store.context.ruleDesc;
+      $<HTMLTextAreaElement>("hintText").value = store.context.strategyHint;
+      $<HTMLInputElement>("inpCons").checked = store.context.consequences;
+      touched.push("上下文");
+    }
+    if (r.api) {
+      Object.assign(store.api, r.api);
+      touched.push("API 设置");
+    }
+    if (r.highScores) {
+      store.highScores = { ...store.highScores, ...r.highScores };
+      touched.push("历史最高分");
+    }
+    if (r.bestTiles) {
+      store.bestTiles = { ...store.bestTiles, ...r.bestTiles };
+      touched.push("历史最大瓷砖");
+    }
+
+    save(store);
+    renderer.animations = store.game.animations;
+    renderer.particlesEnabled = store.game.particles;
+
+    // 棋盘尺寸可能变了
+    if (store.game.boardSize !== SIZE) {
+      setBoardSize(store.game.boardSize);
+      store.lastSize = store.game.boardSize;
+      save(store);
+    }
+    syncGameUi();
+    syncApiUi();
+    syncPaceUi();
+
+    // 对局单独处理：有就覆盖当前局
+    if (expect === "game" && r.session && Array.isArray(r.session.tiles) && r.session.tiles.length) {
+      const sess = r.session;
+      if (typeof sess.size === "number" && sess.size !== SIZE) {
+        setBoardSize(sess.size);
+        store.lastSize = sess.size;
+        store.game.boardSize = sess.size;
+        save(store);
+        syncGameUi();
+      }
+      applySession({
+        v: SESSION_VERSION,
+        size: SIZE,
+        tiles: sess.tiles,
+        score: Number(sess.score) || 0,
+        turn: Number(sess.turn) || 0,
+        memory: Array.isArray(sess.memory) ? sess.memory : [],
+        history: Array.isArray(sess.history) ? sess.history : [],
+        finished: false,
+        savedAt: "",
+      });
+      persist();
+      touched.push(`对局（第 ${state.turn} 手）`);
+    }
+
+    closeDrawers();
+    toast(touched.length ? `已导入：${touched.join("、")}` : "档案为空，未做改动");
+  } catch (err) {
+    toast(`导入失败：${(err as Error).message}`, true);
+  }
+}
+
+/* ═══════════ 不兼容存档提示 ═══════════ */
+
+/**
+ * 磁盘上有数据但读不懂时的兜底。
+ *
+ * 刻意**不自动清理** —— 那等于替玩家做决定，而丢掉的可能是几十手的对局。
+ * 先让玩家把原始数据导出留存，再决定是否重置。
+ */
+function showIncompatibleModal(raw: string, reason: string): void {
+  const modal = $("incompatModal");
+  $("incompatReason").textContent = reason;
+  $("incompatSize").textContent = `${(raw.length / 1024).toFixed(1)} KB`;
+  $("incompatPreview").textContent = raw.slice(0, 400) + (raw.length > 400 ? "\n…" : "");
+  modal.classList.add("show");
+  setLed("err", "发现不兼容的旧存档");
+}
+
+function bindIncompatibleModal(): void {
+  $("bIncompatExport").onclick = () => {
+    const raw = rawSession();
+    if (!raw) {
+      toast("原始数据已不存在", true);
+      return;
+    }
+    downloadRaw(raw, "incompatible-session");
+    toast("已导出旧数据");
+  };
+
+  $("bIncompatReset").onclick = () => {
+    if (!window.confirm("重置回默认？\n旧存档将被清除且无法恢复（建议先导出）。")) return;
+    clearSession();
+    $("incompatModal").classList.remove("show");
+    newGame();
+    setLed("", "已重置");
+    toast("已重置回默认");
+  };
+
+  // 关掉弹框 = 先不动数据，开新局继续玩（存档原样留着）
+  $("bIncompatLater").onclick = () => {
+    $("incompatModal").classList.remove("show");
+    setLed("", "旧存档已保留，未做处理");
+  };
 }
 
 /* ═══════════ 恢复默认 ═══════════ */
@@ -1141,10 +1370,40 @@ paceSlider.addEventListener("input", () => {
 $("bToggle").onclick = toggleRun;
 $("bStep").onclick = () => { pause(); void doTurn(); };
 $("bNew").onclick = newGame;
+$("bArchive").onclick = () => openDrawer("dArchive");
 $("bGame").onclick = () => openDrawer("dGame");
 $("bStrategy").onclick = () => openDrawer("dStrategy");
 $("bApi").onclick = () => openDrawer("dApi");
 $("bLog").onclick = () => { renderLog(); openDrawer("dLog"); };
+
+/* 导入导出 */
+$("bExpGame").onclick = () => doExport("game", "对局");
+$("bExpStrategy").onclick = () => doExport("strategy", "策略");
+$("bExpApi").onclick = () => doExport("api", "API 设置");
+$("bExpLog").onclick = () => doExport("log", "日志");
+$("bExpAll").onclick = () => doExport("all", "全部");
+
+$("bImpGame").onclick = () => pickFile((t) => applyImported(t, "game"));
+$("bImpStrategy").onclick = () => pickFile((t) => applyImported(t, "strategy"));
+$("bImpApi").onclick = () => pickFile((t) => applyImported(t, "api"));
+
+$("fileInput").addEventListener("change", onFileChosen);
+
+$("bArchiveWipe").onclick = () =>
+  confirmAction(
+    "清空全部本地存档？\n（设置、历史最高分、当前对局与调用日志都会被清除，且无法恢复）",
+    () => {
+      clearSession();
+      try {
+        localStorage.removeItem("jev2048.v1");
+      } catch {
+        /* ignore */
+      }
+      location.reload();
+    },
+  );
+
+bindIncompatibleModal();
 $("bSaveApi").onclick = saveApi;
 $("bGameReset").onclick = () =>
   confirmAction("恢复游戏的默认设置？\n（棋盘尺寸、新方块区间、动效都会回到出厂值；历史最高分保留）", () => {
@@ -1174,7 +1433,7 @@ $("bCopyAll").onclick = (e) => {
 };
 selBackend.onchange = refreshBackend;
 scrim.onclick = closeDrawers;
-for (const id of ["bGameDone", "bStrategyDone", "bApiCancel", "bLogDone"]) {
+for (const id of ["bArchiveDone", "bGameDone", "bStrategyDone", "bApiCancel", "bLogDone"]) {
   $(id).onclick = closeDrawers;
 }
 

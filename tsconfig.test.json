@@ -3,7 +3,9 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    // 被测模块（archive / session / config）里有 DOM 调用（Blob、FileReader、
+    // localStorage），需要 DOM 类型才能通过检查。运行期由 Node 垫片或浏览器提供。
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "rootDir": "src",
     "outDir": "dist-test",
@@ -13,6 +15,9 @@
     "src/test/**/*.ts",
     "src/client/engine.ts",
     "src/client/metrics.ts",
+    "src/client/archive.ts",
+    "src/client/config.ts",
+    "src/client/session.ts",
     "src/shared/**/*.ts"
   ]
 }
