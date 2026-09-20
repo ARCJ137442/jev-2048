@@ -13,6 +13,7 @@
  *   node tools/scan-secrets.ts --history  # 连 git 历史一起扫
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,8 +21,13 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 
-/** 扫描时跳过的目录 */
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "dist-test"]);
+/**
+ * 扫描时跳过的目录。
+ *
+ * ⚠ 这里跳过的 `.git` 只指**仓库自己的** .git（在根目录）。
+ * 嵌套在子目录里的 .git 是危险信号，必须报出来 —— 见 walk() 里的处理。
+ */
+const SKIP_DIRS = new Set(["node_modules", "dist", "dist-test"]);
 
 /** 已知的密钥形态。宁可多报，也不能漏。 */
 const PATTERNS: Array<{ name: string; re: RegExp }> = [
@@ -58,6 +64,30 @@ function readRaw(path: string): string {
   return readFileSync(path).toString("latin1");
 }
 
+/**
+ * 扫描一段内容，**同时尝试把它当 zlib 流解开再扫一遍**。
+ *
+ * 为什么需要：git 对象是 zlib 压缩存储的。
+ * 真实事故：`.git.backup/` 曾不在 .gitignore 里，一次 `git add -A`
+ * 把整个旧 .git 提交了进去 —— 里面存有密钥的那个对象是**压缩字节**，
+ * 明文正则完全匹配不到，扫描器报了「干净」。
+ * 但任何人 `zlib.decompress` 一下就能还原出密钥。
+ *
+ * 所以「找不到明文」不等于「没有密钥」——还要看压缩层。
+ */
+function scanWithInflate(data: Buffer, where: string, out: Hit[]): void {
+  scanText(data.toString("latin1"), where, out);
+  // zlib 流可能带 2 字节头（0x78 开头），也可能不带（raw deflate）
+  for (const attempt of [() => inflateSync(data), () => inflateSync(data, { finishFlush: 2 })]) {
+    try {
+      const plain = attempt();
+      if (plain.length > 0) scanText(plain.toString("latin1"), `${where}(解压)`, out);
+    } catch {
+      /* 不是 zlib 流，正常 */
+    }
+  }
+}
+
 function isAllowlisted(text: string): boolean {
   return ALLOWLIST.some((re) => re.test(text));
 }
@@ -73,7 +103,7 @@ function scanText(text: string, where: string, out: Hit[]): void {
   }
 }
 
-function walk(dir: string, out: Hit[]): void {
+function walk(dir: string, out: Hit[], isRoot = false): void {
   let entries: string[];
   try {
     entries = readdirSync(dir);
@@ -89,8 +119,27 @@ function walk(dir: string, out: Hit[]): void {
     } catch {
       continue;
     }
-    if (st.isDirectory()) walk(full, out);
-    else if (st.isFile()) scanText(readRaw(full), relative(ROOT, full), out);
+    if (st.isDirectory()) {
+      // 嵌套的 .git 目录一律视为问题 —— 它会把历史里的所有对象（含已删除的密钥）
+      // 整个带进仓库。这不是「可能有问题」，是「一定有风险」。
+      if (name === ".git" && !isRoot) {
+        out.push({
+          where: relative(ROOT, full),
+          pattern: "嵌套 .git 目录",
+          sample: "整个 git 对象库被提交",
+        });
+        continue;
+      }
+      walk(full, out, false);
+    } else if (st.isFile()) {
+      let buf: Buffer;
+      try {
+        buf = readFileSync(full);
+      } catch {
+        continue;
+      }
+      scanWithInflate(buf, relative(ROOT, full), out);
+    }
   }
 }
 
@@ -116,11 +165,11 @@ function scanHistory(out: Hit[]): void {
     if (seen.has(h)) continue;
     seen.add(h);
     try {
-      const content = execFileSync("git", ["cat-file", "-p", h], {
+      const buf = execFileSync("git", ["cat-file", "-p", h], {
         cwd: ROOT,
         maxBuffer: 64 * 1024 * 1024,
-      }).toString("latin1");
-      scanText(content, `git:${h.slice(0, 8)}`, out);
+      });
+      scanWithInflate(buf, `git:${h.slice(0, 8)}`, out);
     } catch {
       /* 非 blob 对象，跳过 */
     }
@@ -132,7 +181,7 @@ function scanHistory(out: Hit[]): void {
 const wantHistory = process.argv.includes("--history");
 const hits: Hit[] = [];
 
-walk(ROOT, hits);
+walk(ROOT, hits, true);
 if (wantHistory) scanHistory(hits);
 
 if (hits.length === 0) {
