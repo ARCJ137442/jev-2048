@@ -23,6 +23,10 @@ openrouter-secret-api-key*
 *.pack
 *.idx
 
+# 本地验证时的克隆残留
+clone-check/
+*-check/
+
 # 编辑器 / 系统
 .DS_Store
 .vscode/
