@@ -195,6 +195,7 @@ export type BackendId =
   | "vercel"
   | "typesafe"
   | "openrouter"
+  | "laya"
   | "lmstudio";
 
 export interface BackendConfig {

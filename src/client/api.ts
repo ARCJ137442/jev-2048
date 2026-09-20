@@ -109,6 +109,19 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     verified: true,
     needsKey: true,
   },
+  laya: {
+    label: "本地 Laya 服务器",
+    base: "http://127.0.0.1:8137/v1/systemone",
+    model: "typed-decisions",
+    note:
+      "Laya 是 Jev 的**开源替代**：非自回归决策模型，一次前向回答全部问题，无文本生成。" +
+      "它本身是 Python 包、不带 HTTP 服务，需要自己包一层实现 SystemOne 协议的 sidecar。" +
+      "⚠ 上下文窗口小得多（english=512 / multilingual 与 typed-decisions=1024 token），" +
+      "且 confidence 不在同一尺度 —— 为 Jev 标定的阈值不能直接套用。" +
+      "类型判别值是 noul。无鉴权、无计费、不出网。",
+    verified: false,
+    needsKey: false,
+  },
   lmstudio: {
     label: "自建 / 本地兼容端点",
     base: "http://localhost:1234/v1/systemone",

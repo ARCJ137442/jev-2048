@@ -249,6 +249,38 @@ Jev 是决策模型：接收 `state` + `questions`，返回带概率的结构化
 
 完全离线跑 Jev 不可行 —— 官方未开放权重。
 
+### 离线替代：Laya
+
+[Laya](https://github.com/NandhaKishorM/laya)（Apache-2.0）是 Jev 的**开源替代** ——
+同样是非自回归决策模型，一次前向回答全部问题，不生成文本。
+它本身是 Python 包、不带 HTTP 服务，需要自己包一层 sidecar 实现 SystemOne。
+
+```plaintext
+POST /v1/systemone   请求 { state, model, questions }
+                     可选 per-request 字段 head_max_len / max_len
+                     响应 { model, answers, usage, routing }
+GET  /v1/models      列出可路由的 checkpoint
+GET  /healthz        健康检查
+```
+
+- 默认 `http://127.0.0.1:8137`，`--host` / `--port` 可改
+- 默认**无鉴权**；加 `--api-key <k>` 后要求 `Authorization: Bearer <k>`
+- `model` 取值：`router`（默认，语言路由）/ `english` / `multilingual` / `typed-decisions`
+- 响应 `model` 形如 `laya-typed-decisions`，并额外带 `routing` 字段（语言路由决策）
+
+#### 与 Jev 的差异 ⚠️
+
+| | 说明 |
+|---|---|
+| **上下文窗口小** | english=512、multilingual 与 typed-decisions=1024 token，超出从尾部截断 |
+| **choice 选项共享预算** | 每个选项标签共享 `head_max_len`（默认 512）token，选项过多直接 400 并指名是哪个 question |
+| **confidence 不同尺度** | 为 Jev 标定的阈值**不能直接套用**，需重新标定 |
+| **类型判别值是 `noul`** | 不是 Vercel 的 `boolean` |
+| **零成本** | 无 key、无按 token 计费、不出网 |
+
+> 📌 本项目的「本地 Laya 服务器」后端就是为它预留的（默认地址 `127.0.0.1:8137`）。
+> 标注为实验性：适配器尚未随仓库开源，形状以上表为准。
+
 ### 潜在应用领域
 
 本项目的价值不在「让模型玩 2048」，而在于它是一台**可复现的上下文实验台**：
