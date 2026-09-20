@@ -1539,14 +1539,26 @@ function fillBackendDefaults(id: BackendId): void {
 /**
  * 填模型输入框。
  *
- * 用**占位符**承载默认值，而不是预填成值 —— 这样一眼能区分两种状态：
- *   输入框空着  → 用的是后端默认（占位符里灰字显示的就是它）
- *   输入框有值  → 这是自定义的模型
+ * 两类后端分开对待：
  *
- * 预填成值的话两者看起来一模一样，用户没法知道当前跑的是默认还是自己改过的。
+ *   **本站代管**（两个免费试用）—— 模型由服务端决定，输入框禁用，
+ *     占位符只说「由本站指定」，**不暴露具体模型 ID**。
+ *     这是本站的内部选择，写出来只会引导用户去研究一个他改不了的东西。
+ *
+ *   **用户自配** —— 用**占位符**承载默认值，而不是预填成值：
+ *       输入框空着  → 用的是默认（占位符灰字显示的就是它）
+ *       输入框有值  → 这是自定义的
+ *     预填成值的话两者外观一样，用户没法知道当前跑的是默认还是改过的。
  */
 function fillModelField(b: BackendConfig, current: string): void {
   const el = $<HTMLInputElement>("inpModel");
+  if (b.managed) {
+    el.value = "";
+    el.placeholder = "由本站指定";
+    el.disabled = true;
+    return;
+  }
+  el.disabled = false;
   el.placeholder = b.model;
   el.value = current && current !== b.model ? current : "";
 }
@@ -1555,11 +1567,11 @@ function fillModelField(b: BackendConfig, current: string): void {
 function applyBackendGating(b: BackendConfig): void {
   // Base URL 是本站的内部选择（开箱即用后端尤其如此），不展示；
   // Model ID 则对所有后端可见可改 —— 用户可能想换模型做对比实验。
-  $("advancedApi").style.display = b.showBaseUrl ? "" : "none";
+  $("advancedApi").style.display = b.managed ? "none" : "";
 
-  $("modelHint").textContent = b.needsKey
-    ? `留空即用该后端的默认模型（${b.model}）`
-    : "通常无需改动，留空即用本站默认模型";
+  $("modelHint").textContent = b.managed
+    ? "由本站服务端决定，无需也无法修改"
+    : `留空即用该后端的默认模型（${b.model}）`;
 
   $("backendNote").textContent = b.verified || !b.needsKey
     ? (b.verified && b.needsKey ? "✅ 已验证可用。" : "") + (b.needsKey ? b.note : "")

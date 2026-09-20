@@ -69,7 +69,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "由本站的服务器端代为调用，API Key 只存在于服务端环境变量，" +
       "浏览器全程接触不到（DevTools 里也看不到）。额度有限，用尽后请改用其他后端。",
     verified: true,
-    showBaseUrl: false,
+    managed: true,
     needsKey: false,
   },
   openrouterproxy: {
@@ -80,7 +80,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "与「免费试用」同一套服务端代理架构，走另一个上游。密钥同样只存在于服务端。" +
       "额度独立，一个用尽时另一个可能还有余量。",
     verified: true,
-    showBaseUrl: false,
+    managed: true,
     needsKey: false,
   },
   vercel: {
@@ -89,7 +89,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     model: "typesafe-ai/jev",
     note: "浏览器直连。端点 /v1/evaluate，CORS 已实测全开，但密钥会进入浏览器内存。",
     verified: true,
-    showBaseUrl: true,
+    managed: false,
     needsKey: true,
   },
   typesafe: {
@@ -100,7 +100,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "端点与协议已由官方公开的 openapi.json（v0.2.0）确认：只有 POST /v1/systemone 一个决策端点。" +
       "未持密钥实测过。布尔类型判别值是 noul。需要 TypeSafe 账号。",
     verified: true,
-    showBaseUrl: true,
+    managed: false,
     needsKey: true,
   },
   openrouter: {
@@ -111,7 +111,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "已实测可用。模型 ID 必须是 typesafe/jev-1.13（typesafe/jev-latest 与 typesafe-ai/jev 都会报不存在）。" +
       "注意：OpenRouter 的布尔类型判别值是 noul，Vercel 那边叫 boolean，两家相反。",
     verified: true,
-    showBaseUrl: true,
+    managed: false,
     needsKey: true,
   },
   laya: {
@@ -125,7 +125,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "且 confidence 不在同一尺度 —— 为 Jev 标定的阈值不能直接套用。" +
       "类型判别值是 noul。无鉴权、无计费、不出网。",
     verified: false,
-    showBaseUrl: true,
+    managed: false,
     needsKey: false,
   },
   lmstudio: {
@@ -139,7 +139,7 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
       "**打不通 Jev** —— 它是决策模型不是文本模型。必须让本地侧实现 SystemOne 协议，" +
       "把 OpenAI 兼容留在文本模型那一层。",
     verified: false,
-    showBaseUrl: true,
+    managed: false,
     needsKey: false,
   },
 };
