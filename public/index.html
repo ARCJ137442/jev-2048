@@ -364,12 +364,6 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   <span class="sub" title="每一手都由 Jev 评估模型决定 —— 它返回带校准概率的决策，而非生成的文本">决策由 Jev 评估模型给出</span>
   <span class="spacer"></span>
 
-  <button class="hbtn" id="bArchive" title="导入 / 导出存档：对局、策略、API 设置、调用日志">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 7h18v13H3z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 12h6"/>
-    </svg><span class="lbl">存档</span>
-  </button>
-
   <button class="hbtn" id="bGame" title="棋盘大小、新方块取值区间、动效 —— 与玩家和 Jev 的操作无关的自然属性">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/>
@@ -392,6 +386,12 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/>
     </svg><span class="lbl">日志</span>
+  </button>
+
+  <button class="hbtn" id="bArchive" title="导入 / 导出存档：对局、策略、API 设置、调用日志">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7h18v13H3z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 12h6"/>
+    </svg><span class="lbl">存档</span>
   </button>
 </header>
 
@@ -492,6 +492,37 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   </div>
 </div>
 
+<!-- ══════ 额度不足提示 ══════ -->
+<div class="modal" id="quotaModal">
+  <div class="modal-box">
+    <h2>额度不足</h2>
+
+    <div class="warn">
+      <b>当前后端的调用额度已用尽或被限流。</b><br>
+      这通常不是网络问题，重试也不会恢复 —— 换个后端或用自己的 Key 即可继续。
+    </div>
+
+    <div class="field">
+      <label>服务端返回</label>
+      <pre class="rawbox" id="quotaDetail"></pre>
+    </div>
+
+    <div class="field">
+      <label>可以怎么做</label>
+      <div class="desc" style="margin-bottom:0;line-height:1.75">
+        1. 切到 <b>Vercel AI Gateway 直连</b>，填自己的 API Key（推荐，额度归你掌控）<br>
+        2. 换用 <b>TypeSafe 官方</b> 或 <b>OpenRouter</b> 后端<br>
+        3. 稍后再试 —— 如果是共享额度的免费试用，等它恢复
+      </div>
+    </div>
+
+    <div class="actions-wrap">
+      <button id="bQuotaSwitch" class="primary">去切换后端</button>
+      <button id="bQuotaClose" class="ghost">稍后再说</button>
+    </div>
+  </div>
+</div>
+
 <!-- 顶部瞬时提示 -->
 <div id="toast" class="toast"></div>
 
@@ -569,24 +600,39 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   </header>
   <div class="body">
     <div class="field">
-      <label>棋盘大小</label>
-      <div class="presets" id="sizePresets">
-        <button data-size="4">4 × 4</button>
-        <button data-size="6">6 × 6</button>
-        <button data-size="8">8 × 8</button>
+      <label>棋盘大小（宽 × 高，各自独立）</label>
+      <div class="row2">
+        <input type="number" id="inpWidth" min="2" max="16" step="1" placeholder="宽 4">
+        <input type="number" id="inpHeight" min="2" max="16" step="1" placeholder="高 4">
       </div>
-      <div style="margin-top:8px"><select id="inpSize"></select></div>
-      <div class="tinylbl">切换尺寸会立即重开一局。历史最高分按尺寸分别记录。</div>
+      <div class="presets">
+        <button data-w="4" data-h="4">4×4</button>
+        <button data-w="6" data-h="6">6×6</button>
+        <button data-w="8" data-h="8">8×8</button>
+        <button data-w="16" data-h="2">16×2</button>
+      </div>
+      <div class="tinylbl">2 – 16。改动会立即重开一局；历史纪录按「宽×高」分别记录。</div>
     </div>
 
     <div class="field">
       <label>新方块取值区间</label>
-      <div class="desc">只能填 2 的幂次（1、2、4、8…）。上界留空表示不限。</div>
+      <div class="desc">只接受 2 与 4。</div>
       <div class="row2">
-        <input type="number" id="inpSpawnMin" min="1" step="1" placeholder="最小 2">
-        <input type="number" id="inpSpawnMax" min="1" step="1" placeholder="最大（可留空）">
+        <input type="number" id="inpSpawnMin" min="2" max="4" step="2" placeholder="最小 2">
+        <input type="number" id="inpSpawnMax" min="2" max="4" step="2" placeholder="最大 4">
       </div>
-      <div class="warnline" id="spawnWarn">必须是 2 的幂次（1,2,4,8…），且上界不小于下界</div>
+      <div class="warnline" id="spawnWarn">只能填 2 或 4，且上界不小于下界</div>
+    </div>
+
+    <div class="field">
+      <label>生成分布</label>
+      <select id="inpDist">
+        <option value="uniform">均匀 — 区间内各值等概率</option>
+        <option value="weighted">加权 — 权重为值的倒数，越大越罕见</option>
+      </select>
+      <div class="desc" style="margin-top:6px;margin-bottom:0">
+        加权模式下 2 与 4 的出现比约为 2 : 1（P(2)=2/3）；均匀模式各占一半。
+      </div>
     </div>
 
     <div class="field">

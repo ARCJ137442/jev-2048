@@ -9,10 +9,17 @@
  * 因此 moveTiles 内部一律先克隆，返回全新的 tile 对象
  * （id 会被保留，所以渲染层仍能按 id 追踪同一块方块的位移动画）。
  *
- * 设计：tile 列表模型（而非二维数组），因为方块需要稳定 id 才能做过渡动画。
- * 二维数组只在展示 / 发送给模型时由 toGrid() 派生。
+ * 棋盘为**矩形**：宽 COLS、高 ROWS，两者独立可配。
  */
-import { SIZE, type Direction, type Grid, type Tile } from "../shared/types.js";
+import {
+  COLS,
+  ROWS,
+  SPAWN_ALLOWED,
+  type Direction,
+  type Grid,
+  type SpawnDist,
+  type Tile,
+} from "../shared/types.js";
 
 let tileSeq = 0;
 
@@ -46,28 +53,33 @@ export interface MoveResult {
 /**
  * 对 tile 列表执行一次移动。**纯函数：不修改 tiles 中的任何对象。**
  *
- * 所有方向统一处理：按行进方向取出该线的 tile 序列 → 压实并合并 → 写回新位置。
+ * 所有方向统一处理：按行进方向取出该线（行或列）的 tile 序列 →
+ * 压实并合并 → 写回新位置。行与列的独立处理天然支持矩形棋盘。
  */
 export function moveTiles(tiles: Tile[], dir: Direction): MoveResult {
-  const n = SIZE;
-
-  // 关键：先克隆，后续所有修改都作用在副本上
-  const grid: (Tile | null)[][] = Array.from({ length: n }, () =>
-    Array<Tile | null>(n).fill(null),
-  );
-  for (const t of tiles) grid[t.row][t.col] = { ...t };
-
   const horizontal = dir === "left" || dir === "right";
   const forward = dir === "left" || dir === "up";
+  const cols = COLS;
+  const rows = ROWS;
+
+  // 关键：先克隆，后续所有修改都作用在副本上
+  const grid: (Tile | null)[][] = Array.from({ length: rows }, () =>
+    Array<Tile | null>(cols).fill(null),
+  );
+  for (const t of tiles) grid[t.row][t.col] = { ...t };
 
   const next: Tile[] = [];
   const dying: Tile[] = [];
   let score = 0;
   let moved = false;
 
-  for (let line = 0; line < n; line++) {
+  // 水平方向逐行处理，垂直方向逐列处理
+  const lines = horizontal ? rows : cols;
+  const span = horizontal ? cols : rows;
+
+  for (let line = 0; line < lines; line++) {
     const seq: Tile[] = [];
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < span; i++) {
       const r = horizontal ? line : i;
       const c = horizontal ? i : line;
       const t = grid[r][c];
@@ -93,7 +105,7 @@ export function moveTiles(tiles: Tile[], dir: Direction): MoveResult {
     }
 
     slots.forEach((slot, idx) => {
-      const pos = forward ? idx : n - 1 - idx;
+      const pos = forward ? idx : span - 1 - idx;
       const r = horizontal ? line : pos;
       const c = horizontal ? pos : line;
 
@@ -116,40 +128,65 @@ export function moveTiles(tiles: Tile[], dir: Direction): MoveResult {
 }
 
 export function emptyCells(tiles: Tile[]): Array<{ row: number; col: number }> {
-  const used = new Set(tiles.map((t) => t.row * SIZE + t.col));
+  const used = new Set(tiles.map((t) => t.row * COLS + t.col));
   const out: Array<{ row: number; col: number }> = [];
-  for (let i = 0; i < SIZE * SIZE; i++) {
-    if (!used.has(i)) out.push({ row: Math.floor(i / SIZE), col: i % SIZE });
+  for (let i = 0; i < ROWS * COLS; i++) {
+    if (!used.has(i)) out.push({ row: Math.floor(i / COLS), col: i % COLS });
   }
   return out;
 }
 
 /* ---------- 生成区间 ---------- */
 
-/** 是否为 2 的幂次（1 也算，即 2^0） */
-export function isPowerOfTwo(v: number): boolean {
-  return Number.isInteger(v) && v >= 1 && (v & (v - 1)) === 0;
+/** 区间内可用的 2 的幂次（按值升序） */
+export function spawnCandidates(minV: number, maxV: number): number[] {
+  const lo = Math.max(minV, SPAWN_ALLOWED[0]);
+  const hi = Math.min(maxV, SPAWN_ALLOWED[SPAWN_ALLOWED.length - 1]);
+  return SPAWN_ALLOWED.filter((v) => v >= lo && v <= hi);
 }
 
 /**
- * 在 [minV, maxV] 内均匀抽取一个 2 的幂次。
- * 抽的是**指数**均匀，例如 2–8 对应指数 1..3，三个值各 1/3。
- * maxV 为 null 时视作与 minV 相同。
+ * 在 [minV, maxV] 内抽取一个生成值。
+ *
+ *   uniform   等概率
+ *   weighted  权重为值的**倒数** —— 越大的值越罕见。
+ *             例如 2 与 4：P(2)=2/3、P(4)=1/3
  */
-export function pickSpawnValue(minV: number, maxV: number | null): number {
-  const lo = Math.round(Math.log2(Math.max(1, minV)));
-  const hi = maxV === null ? lo : Math.round(Math.log2(Math.max(1, maxV)));
-  if (hi <= lo) return Math.pow(2, lo);
-  const e = lo + Math.floor(Math.random() * (hi - lo + 1));
-  return Math.pow(2, e);
+export function pickSpawnValue(
+  minV: number,
+  maxV: number,
+  dist: SpawnDist = "uniform",
+  rand: () => number = Math.random,
+): number {
+  const cands = spawnCandidates(minV, maxV);
+  if (cands.length === 0) return SPAWN_ALLOWED[0];
+  if (cands.length === 1) return cands[0];
+
+  if (dist === "weighted") {
+    const weights = cands.map((v) => 1 / v);
+    const total = weights.reduce((s, w) => s + w, 0);
+    let r = rand() * total;
+    for (let i = 0; i < cands.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return cands[i];
+    }
+    return cands[cands.length - 1];
+  }
+
+  return cands[Math.floor(rand() * cands.length)];
 }
 
-/** 在随机空位生成新方块，取值来自配置区间 */
-export function spawnTile(tiles: Tile[], minV = 2, maxV: number | null = null): Tile | null {
+/** 在随机空位生成新方块 */
+export function spawnTile(
+  tiles: Tile[],
+  minV = 2,
+  maxV = 4,
+  dist: SpawnDist = "uniform",
+): Tile | null {
   const cells = emptyCells(tiles);
   if (cells.length === 0) return null;
   const c = cells[Math.floor(Math.random() * cells.length)];
-  const t = makeTile(pickSpawnValue(minV, maxV), c.row, c.col);
+  const t = makeTile(pickSpawnValue(minV, maxV, dist), c.row, c.col);
   t.isNew = true;
   return t;
 }
@@ -169,7 +206,7 @@ export function maxTile(tiles: Tile[]): number {
 
 /** 派生二维数字网格（发给 Jev 的 state、启发式评估都用它） */
 export function toGrid(tiles: Tile[]): Grid {
-  const g: Grid = Array.from({ length: SIZE }, () => Array<number>(SIZE).fill(0));
+  const g: Grid = Array.from({ length: ROWS }, () => Array<number>(COLS).fill(0));
   for (const t of tiles) g[t.row][t.col] = t.value;
   return g;
 }

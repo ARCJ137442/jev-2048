@@ -4,10 +4,9 @@
  * 布局：界面锁在 100dvh 内，棋盘由 ResizeObserver 取 min(可用宽, 可用高) 定尺寸。
  */
 import {
-  MAX_BOARD,
-  MIN_BOARD,
-  SIZE,
-  isPowerOfTwo,
+  COLS,
+  ROWS,
+  SPAWN_ALLOWED,
   setBoardSize,
   type BackendId,
   type ChoiceAnswer,
@@ -56,6 +55,7 @@ import { trajectoryCells, countEmpty, maxInCorner, monotonicity } from "./metric
 import {
   BACKENDS,
   DEFAULT_RETRY,
+  JevError,
   callJev,
   estimateCost,
   type ClientConfig,
@@ -72,6 +72,7 @@ import {
   MAX_RETRY,
   clamp01,
   clampBoardSize,
+  clampDist,
   clampInitial,
   clampSpawn,
   bestTileFor,
@@ -194,12 +195,12 @@ function recordProgress(): void {
 
   if (state.score > state.best) {
     state.best = state.score;
-    recordScore(store, SIZE, state.score);
+    recordScore(store, COLS, ROWS, state.score);
     changed = true;
   }
   if (cur > state.bestTile) {
     state.bestTile = cur;
-    recordTile(store, SIZE, cur);
+    recordTile(store, COLS, ROWS, cur);
     changed = true;
   }
   if (changed) updateStats();
@@ -210,8 +211,8 @@ function recordProgress(): void {
 function fitBoard(): void {
   const box = canvas.parentElement;
   if (!box) return;
-  const size = Math.floor(Math.min(box.clientWidth, box.clientHeight));
-  if (size > 40) renderer.resize(size);
+  // 矩形棋盘：宽高都要给，由渲染器取「两个约束中较小的格子尺寸」
+  renderer.resize(box.clientWidth, box.clientHeight);
 }
 
 /**
@@ -331,7 +332,7 @@ function buildState(tiles: Tile[]): Record<string, unknown> {
 
   const base: Record<string, unknown> = {
     board: grid,
-    board_legend: `0=空，其余为方块数值；棋盘为 ${SIZE}×${SIZE}`,
+    board_legend: `0=空，其余为方块数值；棋盘为 ${COLS}×${ROWS}`,
     score: state.score,
     turn: state.turn,
     valid_moves: validMoves(tiles),
@@ -524,6 +525,20 @@ async function doTurn(): Promise<void> {
     error = (err as Error).message;
     console.error(err);
     state.busy = false;
+
+    // 额度问题单独走专用提示 —— 它需要的是「换后端」而不是「重试」
+    if (err instanceof JevError && err.quotaExhausted) {
+      setLed("err", "额度不足");
+      showQuotaModal(error);
+      pushLog({
+        turn: state.turn + 1, move: legal[0], top: 0, bottom: 0, median: 0, confidence: 0,
+        latencyMs: Math.round(performance.now() - turnStart), tokens: 0,
+        reason: `额度不足：${error}`, coerced: false, belowThreshold: undefined, failed: true,
+        request: requestBody, response: null, at,
+      });
+      return;
+    }
+
     setLed("err", "API 失败");
 
     pushLog({
@@ -567,7 +582,7 @@ async function doTurn(): Promise<void> {
     coerced = true;
   }
 
-  const nt = spawnTile(state.tiles, g.spawnMin, g.spawnMax);
+  const nt = spawnTile(state.tiles, g.spawnMin, g.spawnMax, g.spawnDist);
   if (nt) state.tiles.push(nt);
 
   state.turn++;
@@ -624,7 +639,8 @@ function gameOver(): void {
   recordProgress();
   // 结束后立即落盘并标记 finished —— 刷新页面不该「续玩」一局已经结束的棋
   saveSessionNow({
-    size: SIZE,
+    cols: COLS,
+    rows: ROWS,
     tiles: state.tiles,
     score: state.score,
     turn: state.turn,
@@ -654,8 +670,8 @@ function applySession(s: Session): void {
   // 关键：把引擎的 id 计数器顶到存档里的最大值之上，否则新方块会与旧方块 id 撞车
   ensureTileSeqAbove(maxTileId(state.tiles));
 
-  state.best = highScoreFor(store, SIZE);
-  state.bestTile = bestTileFor(store, SIZE);
+  state.best = highScoreFor(store, COLS, ROWS);
+  state.bestTile = bestTileFor(store, COLS, ROWS);
 
   renderer.sync(state.tiles);
   updateStats();
@@ -694,7 +710,7 @@ function restoreSession(): boolean {
 
   const s = r.session;
   // 尺寸对不上或该局已结束 —— 这类是「正常的作废」，不必打扰玩家
-  if (s.size !== SIZE || s.finished || s.tiles.length === 0) {
+  if (s.cols !== COLS || s.rows !== ROWS || s.finished || s.tiles.length === 0) {
     clearSession();
     return false;
   }
@@ -707,7 +723,8 @@ function restoreSession(): boolean {
 /** 把当前对局写进 localStorage。每手结束后调用（内部防抖）。 */
 function persist(): void {
   saveSession({
-    size: SIZE,
+    cols: COLS,
+    rows: ROWS,
     tiles: state.tiles,
     score: state.score,
     turn: state.turn,
@@ -739,16 +756,17 @@ function newGame(): void {
   if (state.tiles.length === 0) {
     console.warn("[Jev×2048] 初始瓷砖放置失败，已兜底放置一个");
     state.tiles.push(
-      makeTile(g.spawnMin, Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE)),
+      makeTile(g.spawnMin, Math.floor(Math.random() * ROWS), Math.floor(Math.random() * COLS)),
     );
   }
 
-  state.best = highScoreFor(store, SIZE);
-  state.bestTile = bestTileFor(store, SIZE);
+  state.best = highScoreFor(store, COLS, ROWS);
+  state.bestTile = bestTileFor(store, COLS, ROWS);
   renderer.sync(state.tiles);
   updateStats();
   saveSessionNow({
-    size: SIZE,
+    cols: COLS,
+    rows: ROWS,
     tiles: state.tiles,
     score: 0,
     turn: 0,
@@ -779,10 +797,10 @@ function placeInitialTiles(): void {
   const lo = clampInitial(g.initialMin, 1);
   const hi = Math.max(lo, clampInitial(g.initialMax, lo));
   const count = lo + Math.floor(Math.random() * (hi - lo + 1));
-  const cap = SIZE * SIZE;              // 不可能超过格子总数
+  const cap = COLS * ROWS;               // 不可能超过格子总数
 
   for (let i = 0; i < Math.min(count, cap); i++) {
-    const t = spawnTile(state.tiles, g.spawnMin, g.spawnMax);
+    const t = spawnTile(state.tiles, g.spawnMin, g.spawnMax, g.spawnDist);
     if (!t) break;                      // 盘面已满
     state.tiles.push(t);
   }
@@ -838,7 +856,7 @@ function manualMove(dir: Direction): void {
   state.tiles = r.tiles;
   state.score += r.score;
   const g = store.game;
-  const nt = spawnTile(state.tiles, g.spawnMin, g.spawnMax);
+  const nt = spawnTile(state.tiles, g.spawnMin, g.spawnMax, g.spawnDist);
   if (nt) state.tiles.push(nt);
   state.turn++;
   state.memory.push({ turn: state.turn, board: beforeGrid, move: dir, score: state.score });
@@ -941,8 +959,13 @@ async function copyText(text: string, btn: HTMLButtonElement): Promise<void> {
 /* ═══════════ 抽屉 ═══════════ */
 
 const scrim = $("scrim");
-/** 呈现顺序即此数组顺序：存档 → 游戏 → 策略 → API → 日志 */
-const DRAWERS = ["dArchive", "dGame", "dStrategy", "dApi", "dLog"];
+/**
+ * 顶栏顺序 = 用户的自然动线：
+ *   先玩（游戏）→ 调整（策略）→ 接通模型（API）→ 回看发生了什么（日志）→ 把一切存下来（存档）
+ *
+ * 存档放最右是因为它是**收尾动作** —— 前面几步都做完之后才会想到它。
+ */
+const DRAWERS = ["dGame", "dStrategy", "dApi", "dLog", "dArchive"];
 
 function openDrawer(id: string): void {
   for (const d of DRAWERS) $(d).classList.toggle("show", d === id);
@@ -958,12 +981,14 @@ function closeDrawers(): void {
 
 function syncGameUi(): void {
   const g = store.game;
-  $<HTMLSelectElement>("inpSize").value = String(g.boardSize);
+  $<HTMLInputElement>("inpWidth").value = String(g.boardWidth);
+  $<HTMLInputElement>("inpHeight").value = String(g.boardHeight);
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-size]")) {
-    b.classList.toggle("on", Number(b.dataset.size) === g.boardSize);
+    b.classList.toggle("on", Number(b.dataset.w) === g.boardWidth && Number(b.dataset.h) === g.boardHeight);
   }
   $<HTMLInputElement>("inpSpawnMin").value = String(g.spawnMin);
-  $<HTMLInputElement>("inpSpawnMax").value = g.spawnMax === null ? "" : String(g.spawnMax);
+  $<HTMLInputElement>("inpSpawnMax").value = String(g.spawnMax);
+  $<HTMLSelectElement>("inpDist").value = g.spawnDist;
   $<HTMLInputElement>("inpInitMin").value = String(g.initialMin);
   $<HTMLInputElement>("inpInitMax").value = String(g.initialMax);
   $<HTMLInputElement>("inpAnim").checked = g.animations;
@@ -979,11 +1004,11 @@ function syncGameUi(): void {
 function applyGameSettings(): void {
   const g = store.game;
   const min = clampSpawn($<HTMLInputElement>("inpSpawnMin").value);
-  const rawMax = $<HTMLInputElement>("inpSpawnMax").value.trim();
-  const max = rawMax === "" ? null : clampSpawn(rawMax);
+  const max = clampSpawn($<HTMLInputElement>("inpSpawnMax").value);
 
   g.spawnMin = min;
-  g.spawnMax = max === null ? null : Math.max(min, max);
+  g.spawnMax = Math.max(min, max);
+  g.spawnDist = clampDist($<HTMLSelectElement>("inpDist").value);
   g.initialMin = clampInitial($<HTMLInputElement>("inpInitMin").value, DEFAULT_GAME.initialMin);
   g.initialMax = Math.max(g.initialMin, clampInitial($<HTMLInputElement>("inpInitMax").value, g.initialMin));
   g.animations = $<HTMLInputElement>("inpAnim").checked;
@@ -1002,12 +1027,10 @@ function applyGameSettings(): void {
 }
 
 function validateSpawn(): boolean {
-  const minV = Number($<HTMLInputElement>("inpSpawnMin").value);
-  const rawMax = $<HTMLInputElement>("inpSpawnMax").value.trim();
-  const maxV = rawMax === "" ? null : Number(rawMax);
-  const bad =
-    !isPowerOfTwo(Math.round(minV)) ||
-    (maxV !== null && (!isPowerOfTwo(Math.round(maxV)) || maxV < minV));
+  const minV = Math.round(Number($<HTMLInputElement>("inpSpawnMin").value));
+  const maxV = Math.round(Number($<HTMLInputElement>("inpSpawnMax").value));
+  const ok = (v: number): boolean => (SPAWN_ALLOWED as readonly number[]).includes(v);
+  const bad = !ok(minV) || !ok(maxV) || maxV < minV;
   $("spawnWarn").style.display = bad ? "block" : "none";
   return !bad;
 }
@@ -1021,28 +1044,33 @@ function validateInitial(): boolean {
   return !bad;
 }
 
-function setBoardSizeAndRestart(n: number): void {
-  const size = clampBoardSize(n);
-  store.game.boardSize = size;
-  store.lastSize = size;
+function setBoardSizeAndRestart(w: number, h: number): void {
+  const cw = clampBoardSize(w);
+  const ch = clampBoardSize(h);
+  store.game.boardWidth = cw;
+  store.game.boardHeight = ch;
+  store.lastWidth = cw;
+  store.lastHeight = ch;
   save(store);
-  setBoardSize(size);
+  setBoardSize(cw, ch);
   syncGameUi();
   newGame();
 }
 
 function bindGameSettings(): void {
-  const sel = $<HTMLSelectElement>("inpSize");
-  for (let n = MIN_BOARD; n <= MAX_BOARD; n++) {
-    const o = document.createElement("option");
-    o.value = String(n);
-    o.textContent = `${n} × ${n}`;
-    sel.appendChild(o);
-  }
-  sel.addEventListener("change", () => setBoardSizeAndRestart(Number(sel.value)));
+  // 宽高各自独立，两个输入框都要钳到 [MIN_BOARD, MAX_BOARD]
+  const onDim = (): void => {
+    setBoardSizeAndRestart(
+      clampBoardSize($<HTMLInputElement>("inpWidth").value),
+      clampBoardSize($<HTMLInputElement>("inpHeight").value),
+    );
+  };
+  $("inpWidth").addEventListener("change", onDim);
+  $("inpHeight").addEventListener("change", onDim);
 
-  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-size]")) {
-    b.onclick = () => setBoardSizeAndRestart(Number(b.dataset.size));
+  // 预设按钮：data-w / data-h
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-w]")) {
+    b.onclick = () => setBoardSizeAndRestart(Number(b.dataset.w), Number(b.dataset.h));
   }
 
   const onSpawn = (): void => { if (validateSpawn()) applyGameSettings(); };
@@ -1050,7 +1078,7 @@ function bindGameSettings(): void {
   $("inpSpawnMax").addEventListener("change", onSpawn);
 
   // 步进间隔不在这里 —— 它只由棋盘下方的滑块控制（见 syncPaceUi）
-  for (const id of ["inpAnim", "inpParticles", "inpStrategy"]) {
+  for (const id of ["inpAnim", "inpParticles", "inpStrategy", "inpDist"]) {
     $(id).addEventListener("change", applyGameSettings);
   }
 
@@ -1100,7 +1128,8 @@ function bindContextSettings(): void {
 function sessionSnapshot(): SessionInput | null {
   if (state.turn === 0 && state.history.length === 0) return null;
   return {
-    size: SIZE,
+    cols: COLS,
+    rows: ROWS,
     tiles: state.tiles,
     score: state.score,
     turn: state.turn,
@@ -1208,9 +1237,10 @@ function applyImported(text: string, expect: ArchiveKind): void {
     renderer.particlesEnabled = store.game.particles;
 
     // 棋盘尺寸可能变了
-    if (store.game.boardSize !== SIZE) {
-      setBoardSize(store.game.boardSize);
-      store.lastSize = store.game.boardSize;
+    if (store.game.boardWidth !== COLS || store.game.boardHeight !== ROWS) {
+      setBoardSize(store.game.boardWidth, store.game.boardHeight);
+      store.lastWidth = store.game.boardWidth;
+      store.lastHeight = store.game.boardHeight;
       save(store);
     }
     syncGameUi();
@@ -1220,16 +1250,19 @@ function applyImported(text: string, expect: ArchiveKind): void {
     // 对局单独处理：有就覆盖当前局
     if (expect === "game" && r.session && Array.isArray(r.session.tiles) && r.session.tiles.length) {
       const sess = r.session;
-      if (typeof sess.size === "number" && sess.size !== SIZE) {
-        setBoardSize(sess.size);
-        store.lastSize = sess.size;
-        store.game.boardSize = sess.size;
+      if (sess.cols !== COLS || sess.rows !== ROWS) {
+        setBoardSize(sess.cols, sess.rows);
+        store.lastWidth = sess.cols;
+      store.lastHeight = sess.rows;
+      store.game.boardWidth = sess.cols;
+      store.game.boardHeight = sess.rows;
         save(store);
         syncGameUi();
       }
       applySession({
         v: SESSION_VERSION,
-        size: SIZE,
+        cols: COLS,
+    rows: ROWS,
         tiles: sess.tiles,
         score: Number(sess.score) || 0,
         turn: Number(sess.turn) || 0,
@@ -1247,6 +1280,31 @@ function applyImported(text: string, expect: ArchiveKind): void {
   } catch (err) {
     toast(`导入失败：${(err as Error).message}`, true);
   }
+}
+
+/* ═══════════ 额度不足提示 ═══════════ */
+
+/**
+ * 额度用尽不该跟「网络抖动」共用同一个错误框。
+ *
+ * 两者的**用户可采取的行动完全不同**：网络问题该重试，额度问题该换后端。
+ * 用一个通用错误框会让用户反复点重试，而重试永远不会成功。
+ */
+function showQuotaModal(detail: string): void {
+  $("quotaDetail").textContent = detail;
+  $("quotaModal").classList.add("show");
+  setLed("err", "额度不足");
+}
+
+function bindQuotaModal(): void {
+  $("bQuotaSwitch").onclick = () => {
+    $("quotaModal").classList.remove("show");
+    openDrawer("dApi");
+  };
+  $("bQuotaClose").onclick = () => {
+    $("quotaModal").classList.remove("show");
+    setLed("", "已暂停");
+  };
 }
 
 /* ═══════════ 不兼容存档提示 ═══════════ */
@@ -1297,16 +1355,16 @@ function bindIncompatibleModal(): void {
     }
 
     // 尺寸先对齐，否则还原出来的棋盘与当前设置不符
-    if (r.session.size !== SIZE) {
-      setBoardSize(r.session.size);
-      store.game.boardSize = r.session.size;
-      store.lastSize = r.session.size;
+    if (r.session.cols !== COLS || r.session.rows !== ROWS) {
+      setBoardSize(r.session.cols, r.session.rows);
+      store.lastWidth = r.session.cols;
+      store.lastHeight = r.session.rows;
       save(store);
       syncGameUi();
     }
 
     applySession(r.session);
-    commitForced({ ...r.session, size: SIZE });
+    commitForced({ ...r.session, cols: COLS, rows: ROWS });
     $("incompatModal").classList.remove("show");
 
     setLed("on", `已强行加载 · 第 ${r.session.turn} 手`);
@@ -1357,9 +1415,10 @@ function resetGameSettings(): void {
   syncGameUi();
   syncPaceUi();
 
-  if (store.game.boardSize !== SIZE) {
-    setBoardSize(store.game.boardSize);
-    store.lastSize = store.game.boardSize;
+  if (store.game.boardWidth !== COLS || store.game.boardHeight !== ROWS) {
+    setBoardSize(store.game.boardWidth, store.game.boardHeight);
+    store.lastWidth = store.game.boardWidth;
+    store.lastHeight = store.game.boardHeight;
     newGame();
   }
 }
@@ -1513,6 +1572,7 @@ $("bArchiveWipe").onclick = () =>
   );
 
 bindIncompatibleModal();
+bindQuotaModal();
 $("bSaveApi").onclick = saveApi;
 $("bGameReset").onclick = () =>
   confirmAction("恢复游戏的默认设置？\n（棋盘尺寸、新方块区间、动效都会回到出厂值；历史最高分保留）", () => {
@@ -1608,8 +1668,10 @@ function boot(): void {
     "bToggle", "bStep", "bNew", "bArchive", "bGame", "bStrategy", "bApi", "bLog",
     "scrim", "dArchive", "dGame", "dStrategy", "dApi", "dLog", "fileInput",
     "incompatModal", "incompatReason", "incompatSize", "incompatPreview",
+    "quotaModal", "quotaDetail", "bQuotaSwitch", "bQuotaClose",
     "bIncompatExport", "bIncompatForce", "bIncompatReset", "bIncompatLater",
-    "ruleDesc", "hintText", "inpCons", "inpSize", "inpSpawnMin", "inpSpawnMax",
+    "ruleDesc", "hintText", "inpCons",
+    "inpWidth", "inpHeight", "inpSpawnMin", "inpSpawnMax", "inpDist",
     "inpInitMin", "inpInitMax", "spawnWarn", "initWarn", "inpAnim", "inpParticles",
     "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
     "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
@@ -1617,7 +1679,7 @@ function boot(): void {
     "logList", "logCount", "bCopyAll", "bLogClear",
   ]);
 
-  setBoardSize(store.lastSize);
+  setBoardSize(store.lastWidth, store.lastHeight);
   renderer.animations = store.game.animations;
   renderer.particlesEnabled = store.game.particles;
   bindSwipe(canvas);
@@ -1652,6 +1714,6 @@ for (const t of [60, 200, 500]) setTimeout(() => { fitBoard(); fitChart(); }, t)
 
 void DEFAULT_RETRY; // 保留默认值导出，供外部引用
 console.info(
-  `[Jev×2048] 棋盘 ${SIZE}×${SIZE}　生成 ${store.game.spawnMin}–${store.game.spawnMax ?? "∞"}` +
+  `[Jev×2048] 棋盘 ${COLS}×${ROWS}　生成 ${store.game.spawnMin}–${store.game.spawnMax} (${store.game.spawnDist})` +
     `　记忆 ${store.game.memory === null ? "最大" : store.game.memory}　阈值 ${store.game.threshold}`,
 );

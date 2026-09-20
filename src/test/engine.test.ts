@@ -12,7 +12,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { setBoardSize, SIZE, type Direction, type Grid, type Tile } from "../shared/types.js";
+import {
+  COLS,
+  ROWS,
+  SPAWN_ALLOWED,
+  isPowerOfTwo,
+  setBoardSize,
+  type Direction,
+  type Grid,
+  type Tile,
+} from "../shared/types.js";
 import {
   makeTile,
   moveTiles,
@@ -21,7 +30,7 @@ import {
   isGameOver,
   spawnTile,
   pickSpawnValue,
-  isPowerOfTwo,
+  spawnCandidates,
   emptyCells,
   maxTile,
 } from "../client/engine.js";
@@ -33,7 +42,8 @@ import { MAX_INITIAL, clampInitial } from "../client/config.js";
 function gridToTiles(g: Grid): Tile[] {
   const out: Tile[] = [];
   for (let r = 0; r < g.length; r++) {
-    for (let c = 0; c < g.length; c++) {
+    // 注意用 g[r].length 取列数 —— 矩形棋盘下不能拿 g.length 顶替
+    for (let c = 0; c < g[r].length; c++) {
       if (g[r][c]) out.push(makeTile(g[r][c], r, c));
     }
   }
@@ -50,10 +60,12 @@ function moved(g: Grid, d: Direction): Grid {
  * 避免同一个思维错误在两处同时出现。
  */
 function reference(g: Grid, d: Direction): Grid {
-  const n = g.length;
+  const rows = g.length;
+  const cols = g[0].length;
   const out = g.map((r) => [...r]);
 
-  const pack = (arr: number[]): number[] => {
+  /** 按一行/一列的长度压实合并 */
+  const pack = (arr: number[], width: number): number[] => {
     const xs = arr.filter((v) => v !== 0);
     const res: number[] = [];
     for (let i = 0; i < xs.length; i++) {
@@ -64,23 +76,23 @@ function reference(g: Grid, d: Direction): Grid {
         res.push(xs[i]);
       }
     }
-    while (res.length < n) res.push(0);
+    while (res.length < width) res.push(0);
     return res;
   };
 
   if (d === "left") {
-    for (let r = 0; r < n; r++) out[r] = pack(out[r]);
+    for (let r = 0; r < rows; r++) out[r] = pack(out[r], cols);
   } else if (d === "right") {
-    for (let r = 0; r < n; r++) out[r] = pack([...out[r]].reverse()).reverse();
+    for (let r = 0; r < rows; r++) out[r] = pack([...out[r]].reverse(), cols).reverse();
   } else if (d === "up") {
-    for (let c = 0; c < n; c++) {
-      const col = pack(Array.from({ length: n }, (_, r) => out[r][c]));
-      for (let r = 0; r < n; r++) out[r][c] = col[r];
+    for (let c = 0; c < cols; c++) {
+      const col = pack(Array.from({ length: rows }, (_, r) => out[r][c]), rows);
+      for (let r = 0; r < rows; r++) out[r][c] = col[r];
     }
   } else {
-    for (let c = 0; c < n; c++) {
-      const col = pack(Array.from({ length: n }, (_, r) => out[r][c]).reverse()).reverse();
-      for (let r = 0; r < n; r++) out[r][c] = col[r];
+    for (let c = 0; c < cols; c++) {
+      const col = pack(Array.from({ length: rows }, (_, r) => out[r][c]).reverse(), rows).reverse();
+      for (let r = 0; r < rows; r++) out[r][c] = col[r];
     }
   }
   return out;
@@ -89,7 +101,7 @@ function reference(g: Grid, d: Direction): Grid {
 /* ══════════════ 1. 纯度（回归测试）══════════════ */
 
 test("moveTiles 不修改传入的 tile 对象", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const tiles = gridToTiles([
     [2, 2, 0, 0],
     [4, 0, 4, 0],
@@ -105,7 +117,7 @@ test("moveTiles 不修改传入的 tile 对象", () => {
 });
 
 test("validMoves 不修改传入的 tile 对象（回归：曾导致棋盘被搅乱）", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const tiles = gridToTiles([
     [2, 0, 4, 0],
     [0, 4, 0, 2],
@@ -121,7 +133,7 @@ test("validMoves 不修改传入的 tile 对象（回归：曾导致棋盘被搅
 });
 
 test("isGameOver 不修改传入的 tile 对象", () => {
-  setBoardSize(3);
+  setBoardSize(3, 3);
   const tiles = gridToTiles([
     [2, 4, 8],
     [4, 8, 16],
@@ -133,7 +145,7 @@ test("isGameOver 不修改传入的 tile 对象", () => {
 });
 
 test("连续调用 validMoves 结果稳定（棋盘不会被逐步搅乱）", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const tiles = gridToTiles([
     [2, 4, 2, 4],
     [4, 2, 4, 2],
@@ -148,7 +160,7 @@ test("连续调用 validMoves 结果稳定（棋盘不会被逐步搅乱）", ()
 });
 
 test("试算若干方向后再执行移动，结果与直接执行一致", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const start: Grid = [
     [0, 0, 0, 2],
     [0, 0, 0, 4],
@@ -170,7 +182,7 @@ test("试算若干方向后再执行移动，结果与直接执行一致", () =>
 /* ══════════════ 2. 方向规则 ══════════════ */
 
 test("down：整列向下压实，行列不串位", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const got = moved(
     [
       [2, 0, 0, 0],
@@ -189,7 +201,7 @@ test("down：整列向下压实，行列不串位", () => {
 });
 
 test("down：每列独立处理，不会跨列", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const got = moved(
     [
       [2, 4, 8, 16],
@@ -208,7 +220,7 @@ test("down：每列独立处理，不会跨列", () => {
 });
 
 test("down：列内合并", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const got = moved(
     [
       [2, 0, 0, 0],
@@ -227,7 +239,7 @@ test("down：列内合并", () => {
 });
 
 test("up / left / right 基础规则", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const g: Grid = [
     [2, 0, 0, 2],
     [0, 0, 0, 0],
@@ -257,7 +269,7 @@ test("up / left / right 基础规则", () => {
 /* ══════════════ 3. 合并规则细节 ══════════════ */
 
 test("一行 2,2,2,2 向左合并成 4,4（不是 8）", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const r = moveTiles(gridToTiles([[2, 2, 2, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), "left");
   assert.deepEqual(toGrid(r.tiles), [
     [4, 4, 0, 0],
@@ -268,20 +280,20 @@ test("一行 2,2,2,2 向左合并成 4,4（不是 8）", () => {
 });
 
 test("合并得分等于新方块数值之和", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const r = moveTiles(gridToTiles([[2, 2, 4, 4], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), "left");
   assert.equal(r.score, 4 + 8);
 });
 
 test("没有可合并时得分为 0", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const r = moveTiles(gridToTiles([[2, 4, 8, 16], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), "left");
   assert.equal(r.score, 0);
   assert.equal(r.moved, false);
 });
 
 test("已贴边的移动判为未移动", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const g: Grid = [
     [2, 4, 8, 16],
     [0, 0, 0, 0],
@@ -294,7 +306,7 @@ test("已贴边的移动判为未移动", () => {
 });
 
 test("合并产生的 dying 恰好是两个源方块，且都落在目标格", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const r = moveTiles(gridToTiles([[2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), "left");
   assert.equal(r.dying.length, 2);
   for (const d of r.dying) {
@@ -310,7 +322,7 @@ test("差分测试：随机棋盘 × 全部方向 × 多种尺寸，与参考实
   let checked = 0;
 
   for (const n of [3, 4, 5, 6]) {
-    setBoardSize(n);
+    setBoardSize(n, n);
     for (let trial = 0; trial < 400; trial++) {
       const g: Grid = Array.from({ length: n }, () =>
         Array.from({ length: n }, () =>
@@ -331,7 +343,7 @@ test("差分测试：随机棋盘 × 全部方向 × 多种尺寸，与参考实
 test("上下移动时，任何方块都不得改变列号（动画不会有左右分量）", () => {
   const dirs: Direction[] = ["up", "down"];
   for (const n of [3, 4, 5, 6]) {
-    setBoardSize(n);
+    setBoardSize(n, n);
     for (let trial = 0; trial < 300; trial++) {
       const g: Grid = Array.from({ length: n }, () =>
         Array.from({ length: n }, () =>
@@ -365,13 +377,13 @@ test("上下移动时，任何方块都不得改变列号（动画不会有左�
       }
     }
   }
-  setBoardSize(4);
+  setBoardSize(4, 4);
 });
 
 test("左右移动时，任何方块都不得改变行号（动画不会有上下分量）", () => {
   const dirs: Direction[] = ["left", "right"];
   for (const n of [3, 4, 5, 6]) {
-    setBoardSize(n);
+    setBoardSize(n, n);
     for (let trial = 0; trial < 300; trial++) {
       const g: Grid = Array.from({ length: n }, () =>
         Array.from({ length: n }, () =>
@@ -402,11 +414,11 @@ test("左右移动时，任何方块都不得改变行号（动画不会有上�
       }
     }
   }
-  setBoardSize(4);
+  setBoardSize(4, 4);
 });
 
 test("列内下移：同一列内方块的行号单调不降，且不越界", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const g: Grid = [
     [2, 0, 0, 0],
     [0, 0, 0, 0],
@@ -431,7 +443,7 @@ const sortedKeys = (cells: Array<{ row: number; col: number }>): string[] =>
   [...new Set(cells.map(keyOf))].sort();
 
 test("trajectoryCells：覆盖整条路径，含中间格（diff 会漏掉的那些）", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   // 一个方块从 (0,0) 一路滑到 (3,0)，中间 (1,0)(2,0) 前后都是空的
   const before = gridToTiles([
     [2, 0, 0, 0],
@@ -446,7 +458,7 @@ test("trajectoryCells：覆盖整条路径，含中间格（diff 会漏掉的那
 });
 
 test("trajectoryCells：未受影响的区域不出现", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const before = gridToTiles([
     [2, 0, 0, 0],
     [4, 0, 0, 0],
@@ -461,7 +473,7 @@ test("trajectoryCells：未受影响的区域不出现", () => {
 });
 
 test("trajectoryCells：无位移时返回空数组", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const before = gridToTiles([
     [2, 0, 0, 0],
     [4, 0, 0, 0],
@@ -475,7 +487,7 @@ test("trajectoryCells：无位移时返回空数组", () => {
 });
 
 test("trajectoryCells：合并时包含两个源格与产物格", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const before = gridToTiles([
     [2, 0, 0, 0],
     [0, 0, 0, 0],
@@ -489,7 +501,7 @@ test("trajectoryCells：合并时包含两个源格与产物格", () => {
 });
 
 test("trajectoryCells：新生成的方块所在格也算轨迹", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const before = gridToTiles([
     [2, 0, 0, 0],
     [0, 0, 0, 0],
@@ -504,7 +516,7 @@ test("trajectoryCells：新生成的方块所在格也算轨迹", () => {
 
 test("trajectoryCells：结果始终在棋盘范围内且不重复", () => {
   for (const n of [3, 4, 6, 8]) {
-    setBoardSize(n);
+    setBoardSize(n, n);
     for (let trial = 0; trial < 120; trial++) {
       const g: Grid = Array.from({ length: n }, () =>
         Array.from({ length: n }, () =>
@@ -523,7 +535,7 @@ test("trajectoryCells：结果始终在棋盘范围内且不重复", () => {
       }
     }
   }
-  setBoardSize(4);
+  setBoardSize(4, 4);
 });
 
 /* ══════════════ 5. 生成区间 ══════════════ */
@@ -533,32 +545,61 @@ test("isPowerOfTwo", () => {
   for (const v of [0, 3, 6, 7, 12, -2, 1.5]) assert.ok(!isPowerOfTwo(v), `${v} 不应为 2 的幂`);
 });
 
-test("pickSpawnValue：落在区间内且恒为 2 的幂", () => {
-  for (const [lo, hi] of [[2, 2], [2, 4], [2, 8], [4, 16], [1, 1]] as Array<[number, number]>) {
-    const seen = new Set<number>();
-    for (let i = 0; i < 400; i++) {
+test("pickSpawnValue：结果恒在允许集合 {2,4} 内", () => {
+  for (const [lo, hi] of [[2, 2], [2, 4], [4, 4], [1, 8]] as Array<[number, number]>) {
+    for (let i = 0; i < 300; i++) {
       const v = pickSpawnValue(lo, hi);
       assert.ok(isPowerOfTwo(v), `产生了非 2 的幂：${v}`);
-      assert.ok(v >= lo && v <= hi, `${v} 超出 [${lo}, ${hi}]`);
-      seen.add(v);
-    }
-    // 指数区间内的每个值都应有机会出现
-    const loE = Math.round(Math.log2(lo));
-    const hiE = Math.round(Math.log2(hi));
-    if (hiE > loE) {
-      assert.equal(seen.size, hiE - loE + 1, `[${lo},${hi}] 未覆盖全部取值`);
-    } else {
-      assert.equal(seen.size, 1);
+      assert.ok((SPAWN_ALLOWED as readonly number[]).includes(v), `${v} 不在允许集合内`);
     }
   }
 });
 
-test("pickSpawnValue：max 为 null 时等同于 min", () => {
-  for (let i = 0; i < 50; i++) assert.equal(pickSpawnValue(4, null), 4);
+test("pickSpawnValue：min == max 时恒定返回该值", () => {
+  for (const v of SPAWN_ALLOWED) {
+    for (let i = 0; i < 50; i++) assert.equal(pickSpawnValue(v, v), v);
+  }
+});
+
+test("spawnCandidates：只返回允许的 2 与 4", () => {
+  assert.deepEqual(spawnCandidates(2, 4), [2, 4]);
+  assert.deepEqual(spawnCandidates(2, 2), [2]);
+  assert.deepEqual(spawnCandidates(4, 4), [4]);
+  // 越界输入被夹回允许范围
+  assert.deepEqual(spawnCandidates(1, 8), [2, 4]);
+  assert.deepEqual(spawnCandidates(8, 16), []);
+});
+
+test("pickSpawnValue：uniform 分布下 2 与 4 各占一半", () => {
+  const N = 20000;
+  let two = 0;
+  for (let i = 0; i < N; i++) if (pickSpawnValue(2, 4, "uniform") === 2) two++;
+  const ratio = two / N;
+  assert.ok(Math.abs(ratio - 0.5) < 0.03, `2 的占比 ${ratio.toFixed(3)}，偏离 0.5 过多`);
+});
+
+test("pickSpawnValue：weighted 分布下权重为值的倒数（P(2)=2/3）", () => {
+  const N = 30000;
+  let two = 0;
+  for (let i = 0; i < N; i++) if (pickSpawnValue(2, 4, "weighted") === 2) two++;
+  const ratio = two / N;
+  // 1/2 : 1/4 = 2 : 1 → P(2) = 2/3
+  assert.ok(Math.abs(ratio - 2 / 3) < 0.03, `2 的占比 ${ratio.toFixed(3)}，偏离 2/3 过多`);
+});
+
+test("pickSpawnValue：weighted 下 4 明显比 2 罕见", () => {
+  let two = 0;
+  let four = 0;
+  for (let i = 0; i < 8000; i++) {
+    const v = pickSpawnValue(2, 4, "weighted");
+    if (v === 2) two++;
+    else if (v === 4) four++;
+  }
+  assert.ok(two > four * 1.6, `期望 2 远多于 4，实得 ${two} vs ${four}`);
 });
 
 test("spawnTile：落在空位，且不修改入参", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   const tiles = gridToTiles([
     [2, 4, 8, 16],
     [4, 8, 16, 32],
@@ -575,7 +616,7 @@ test("spawnTile：落在空位，且不修改入参", () => {
 });
 
 test("spawnTile：棋盘已满返回 null", () => {
-  setBoardSize(3);
+  setBoardSize(3, 3);
   const tiles = gridToTiles([
     [2, 4, 8],
     [4, 8, 16],
@@ -587,7 +628,7 @@ test("spawnTile：棋盘已满返回 null", () => {
 /* ══════════════ 6. 辅助函数 ══════════════ */
 
 test("emptyCells 行列索引正确", () => {
-  setBoardSize(3);
+  setBoardSize(3, 3);
   const tiles = gridToTiles([
     [2, 0, 0],
     [0, 0, 0],
@@ -601,7 +642,7 @@ test("emptyCells 行列索引正确", () => {
 });
 
 test("toGrid 行列映射正确（不会转置）", () => {
-  setBoardSize(3);
+  setBoardSize(3, 3);
   const tiles = [makeTile(2, 0, 2), makeTile(8, 2, 0)];
   assert.deepEqual(toGrid(tiles), [
     [0, 0, 2],
@@ -611,15 +652,16 @@ test("toGrid 行列映射正确（不会转置）", () => {
 });
 
 test("maxTile", () => {
-  setBoardSize(4);
+  setBoardSize(4, 4);
   assert.equal(maxTile(gridToTiles([[2, 4], [8, 16]])), 16);
   assert.equal(maxTile([]), 0);
 });
 
 test("非 4×4 尺寸下四方向均正确", () => {
   for (const n of [3, 5, 6]) {
-    setBoardSize(n);
-    assert.equal(SIZE, n);
+    setBoardSize(n, n);
+    assert.equal(COLS, n);
+    assert.equal(ROWS, n);
     const g: Grid = Array.from({ length: n }, (_, r) =>
       Array.from({ length: n }, (_, c) => (r === 0 && c === 0 ? 2 : 0)),
     );
@@ -631,7 +673,7 @@ test("非 4×4 尺寸下四方向均正确", () => {
       `${n}×${n} down 失败`,
     );
   }
-  setBoardSize(4);
+  setBoardSize(4, 4);
 });
 
 /* ══════════════ 7. 初始瓷砖个数（棋盘不能开局为空）══════════════ */
@@ -682,7 +724,7 @@ test("初始瓷砖个数区间：任意合法配置下都至少放 1 个", () =>
 
 test("初始瓷砖数量不会超过棋盘格子总数", () => {
   for (const size of [3, 4, 8]) {
-    setBoardSize(size);
+    setBoardSize(size, size);
     const cap = size * size;
     const want = 999;                     // 请求一个荒谬的数量
     let placed = 0;
@@ -695,5 +737,114 @@ test("初始瓷砖数量不会超过棋盘格子总数", () => {
     }
     assert.ok(placed <= cap, `${size}×${size} 放了 ${placed} 个，超过容量 ${cap}`);
   }
-  setBoardSize(4);
+  setBoardSize(4, 4);
+});
+
+
+/* ══════════════ 8. 矩形棋盘（宽高独立）══════════════ */
+
+test("矩形棋盘：down 按列处理，行数与列数互不干扰", () => {
+  setBoardSize(3, 2);                     // 3 宽 × 2 高
+  const g: Grid = [
+    [2, 0, 4],
+    [0, 0, 0],
+  ];
+  assert.deepEqual(moved(g, "down"), [
+    [0, 0, 0],
+    [2, 0, 4],
+  ]);
+});
+
+test("矩形棋盘：left/right 按行处理", () => {
+  setBoardSize(2, 3);                     // 2 宽 × 3 高
+  const g: Grid = [
+    [2, 0],
+    [0, 4],
+    [8, 0],
+  ];
+  assert.deepEqual(moved(g, "left"), [
+    [2, 0],
+    [4, 0],
+    [8, 0],
+  ]);
+  assert.deepEqual(moved(g, "right"), [
+    [0, 2],
+    [0, 4],
+    [0, 8],
+  ]);
+});
+
+test("矩形棋盘：差分测试（多组宽高 × 四方向）", () => {
+  const dirs: Direction[] = ["up", "down", "left", "right"];
+  const dims: Array<[number, number]> = [
+    [2, 2], [2, 5], [5, 2], [3, 7], [7, 3], [16, 2], [2, 16], [8, 8],
+  ];
+  for (const [w, h] of dims) {
+    setBoardSize(w, h);
+    for (let trial = 0; trial < 120; trial++) {
+      const g: Grid = Array.from({ length: h }, () =>
+        Array.from({ length: w }, () =>
+          Math.random() < 0.35 ? [2, 4, 8][Math.floor(Math.random() * 3)] : 0,
+        ),
+      );
+      for (const d of dirs) {
+        assert.deepEqual(
+          moved(g, d),
+          reference(g, d),
+          `${w}×${h} dir=${d} 输入=${JSON.stringify(g)}`,
+        );
+      }
+    }
+  }
+  setBoardSize(4, 4);
+});
+
+test("矩形棋盘：toGrid 与 emptyCells 的索引正确", () => {
+  setBoardSize(5, 2);
+  const tiles = [makeTile(2, 0, 4), makeTile(8, 1, 0)];
+  const g = toGrid(tiles);
+  assert.equal(g.length, 2, "应有 2 行");
+  assert.equal(g[0].length, 5, "每行应有 5 列");
+  assert.equal(g[0][4], 2);
+  assert.equal(g[1][0], 8);
+
+  const cells = emptyCells(tiles);
+  assert.equal(cells.length, 5 * 2 - 2);
+  assert.ok(cells.every((c) => c.row < 2 && c.col < 5));
+});
+
+test("矩形棋盘：轨迹不越界", () => {
+  for (const [w, h] of [[3, 6], [6, 3], [16, 2]]) {
+    setBoardSize(w, h);
+    for (let trial = 0; trial < 60; trial++) {
+      const g: Grid = Array.from({ length: h }, () =>
+        Array.from({ length: w }, () =>
+          Math.random() < 0.4 ? [2, 4, 8][Math.floor(Math.random() * 3)] : 0,
+        ),
+      );
+      const before = gridToTiles(g);
+      for (const d of ["up", "down", "left", "right"] as Direction[]) {
+        const m = moveTiles(before, d);
+        for (const c of trajectoryCells(before, m.tiles, m.dying)) {
+          assert.ok(c.row >= 0 && c.row < h && c.col >= 0 && c.col < w,
+            `${w}×${h} dir=${d} 轨迹越界 (${c.row},${c.col})`);
+        }
+      }
+    }
+  }
+  setBoardSize(4, 4);
+});
+
+test("setBoardSize：越界宽高被拒绝", () => {
+  assert.throws(() => setBoardSize(1, 4));
+  assert.throws(() => setBoardSize(4, 1));
+  assert.throws(() => setBoardSize(17, 4));
+  assert.throws(() => setBoardSize(4, 17));
+  setBoardSize(2, 2);
+  assert.equal(COLS, 2);
+  assert.equal(ROWS, 2);
+  setBoardSize(16, 16);
+  assert.equal(COLS, 16);
+  assert.equal(ROWS, 16);
+  setBoardSize(4, 4);
 });

@@ -33,7 +33,7 @@ export interface Archive {
   kind: ArchiveKind;
   exportedAt: string;
   /** 导出时的应用信息，便于人工辨认 */
-  meta?: { boardSize?: number; turn?: number; score?: number };
+  meta?: { cols?: number; rows?: number; turn?: number; score?: number };
   payload: unknown;
 }
 
@@ -72,7 +72,12 @@ export function buildArchive(
       return {
         ...base,
         kind,
-        meta: { boardSize: store.game.boardSize, turn: session?.turn ?? 0, score: session?.score ?? 0 },
+        meta: {
+          cols: store.game.boardWidth,
+          rows: store.game.boardHeight,
+          turn: session?.turn ?? 0,
+          score: session?.score ?? 0,
+        },
         payload: {
           game: store.game,
           session,
@@ -105,7 +110,12 @@ export function buildArchive(
       return {
         ...base,
         kind,
-        meta: { boardSize: store.game.boardSize, turn: session?.turn ?? 0, score: session?.score ?? 0 },
+        meta: {
+          cols: store.game.boardWidth,
+          rows: store.game.boardHeight,
+          turn: session?.turn ?? 0,
+          score: session?.score ?? 0,
+        },
         payload: {
           game: store.game,
           context: store.context,

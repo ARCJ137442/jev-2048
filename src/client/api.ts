@@ -21,10 +21,12 @@ import type {
 
 export const BACKENDS: Record<BackendId, BackendConfig> = {
   localproxy: {
-    label: "本机代理",
+    label: "免费试用",
     base: "/api/evaluate",
     model: "typesafe-ai/jev",
-    note: "API Key 由本机服务器持有并注入。浏览器全程接触不到密钥，DevTools 里也看不到。",
+    note:
+      "由本站的服务器端代为调用，API Key 只存在于服务端环境变量，" +
+      "浏览器全程接触不到（DevTools 里也看不到）。额度有限，用尽后请改用其他后端。",
     verified: true,
     needsKey: false,
   },
@@ -95,6 +97,12 @@ export class JevError extends Error {
     readonly status?: number,
     /** 是否属于「值得重试」的错误 */
     readonly retryable = false,
+    /**
+     * 是否为「额度/配额」类问题。
+     *
+     * 这类错误值得单独提示：用户能做的事不是「重试」，而是**换一个后端或用自己的 key**。
+     */
+    readonly quotaExhausted = false,
   ) {
     super(message);
     this.name = "JevError";
@@ -104,6 +112,29 @@ export class JevError extends Error {
 /** 429 / 408 / 5xx 属于服务端或配额侧的瞬时问题，值得重试 */
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || (status >= 500 && status <= 599);
+}
+
+/**
+ * 判断一条错误是否属于「额度用尽」。
+ *
+ * 除了 402/429 这类状态码，还要看文案 —— Gateway 在预算耗尽时
+ * 返回的仍是 4xx，措辞里会带 credits / quota / budget / 余额 等字样。
+ */
+export function isQuotaError(status: number | undefined, message: string): boolean {
+  if (status === 402) return true;
+  if (status === 429) return true;
+  const m = message.toLowerCase();
+  return (
+    m.includes("quota") ||
+    m.includes("credit") ||
+    m.includes("budget") ||
+    m.includes("insufficient") ||
+    m.includes("rate limit") ||
+    m.includes("exceeded") ||
+    message.includes("额度") ||
+    message.includes("余额") ||
+    message.includes("配额")
+  );
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -158,7 +189,12 @@ async function callOnce(
 
   if (!res.ok) {
     const msg = data.error?.message ?? text.slice(0, 200);
-    throw new JevError(`HTTP ${res.status}：${msg}`, res.status, isRetryableStatus(res.status));
+    throw new JevError(
+      `HTTP ${res.status}：${msg}`,
+      res.status,
+      isRetryableStatus(res.status),
+      isQuotaError(res.status, msg),
+    );
   }
   if (!data.answers) {
     throw new JevError(`响应缺少 answers 字段：${text.slice(0, 200)}`, res.status, false);

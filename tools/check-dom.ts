@@ -29,6 +29,9 @@ function collectRefs(src: string): { id: string; line: number }[] {
   const out: { id: string; line: number }[] = [];
   const lines = src.split("\n");
 
+  /** 行号 = 该字符在全文中的位置属于第几行 */
+  const lineAt = (offset: number): number => src.slice(0, offset).split("\n").length;
+
   // 只认形如 $("x") / $<T>("x") 的直接引用，以及数组字面量里的小驼峰标识符。
   // 前者靠语法上下文，后者靠命名约定 —— 我们的 id 一律是 lowerCamelCase。
   //
@@ -37,7 +40,7 @@ function collectRefs(src: string): { id: string; line: number }[] {
   // 里的 "on" 也当成 id。
   const DIRECT_PLAIN = /\$\(\s*"([^"]+)"\s*\)/g;
   const DIRECT_TYPED = /\$<[^>]+>\(\s*"([^"]+)"\s*\)/g;
-  const ARRAY = /\[\s*((?:"[^"]+"\s*,?\s*)+)\]/g;
+  const ARRAY = /\[\s*((?:"[^"]+"\s*,?\s*)+)\]/gs;
   const IDENT = /^[a-z][A-Za-z0-9]*$/;
 
   // 这些是常见的非 id 字符串，避免误报
@@ -49,18 +52,21 @@ function collectRefs(src: string): { id: string; line: number }[] {
     "button", "text", "json", "GET", "POST",
   ]);
 
+  // 直接引用逐行扫即可
   lines.forEach((line, i) => {
-    // $("...") / $<T>("...") 一定是 id，无需过滤
     for (const m of line.matchAll(DIRECT_PLAIN)) out.push({ id: m[1], line: i + 1 });
     for (const m of line.matchAll(DIRECT_TYPED)) out.push({ id: m[1], line: i + 1 });
-
-    for (const m of line.matchAll(ARRAY)) {
-      for (const s of m[1].matchAll(/"([^"]+)"/g)) {
-        const id = s[1];
-        if (IDENT.test(id) && !NOT_ID.has(id)) out.push({ id, line: i + 1 });
-      }
-    }
   });
+
+  // 数组字面量必须在**全文**上匹配 —— 逐行匹配会漏掉跨行数组，
+  // 而 assertDom([...]) 恰恰是跨行写的（漏掉它曾导致真实故障）。
+  for (const m of src.matchAll(ARRAY)) {
+    const at = lineAt(m.index ?? 0);
+    for (const s of m[1].matchAll(/"([^"]+)"/g)) {
+      const id = s[1];
+      if (IDENT.test(id) && !NOT_ID.has(id)) out.push({ id, line: at });
+    }
+  }
 
   return out;
 }

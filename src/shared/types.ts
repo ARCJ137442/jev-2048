@@ -9,29 +9,59 @@
    ============================================================ */
 
 /**
- * 棋盘边长。**可变** —— 通过 setBoardSize() 在开局前设置。
+ * 棋盘尺寸。**宽高独立可变** —— 通过 setBoardSize() 在开局前设置。
  *
- * 注意：这是 ESM 的 live binding，各模块 `import { SIZE }` 后读到的是最新值。
- * 但**不要**在模块顶层写 `const n = SIZE` 之类的快照，那样会固化。
+ * 注意：这是 ESM 的 live binding，各模块 `import { COLS, ROWS }` 后读到的是最新值。
+ * 但**不要**在模块顶层写 `const n = COLS` 之类的快照，那样会固化。
  */
-export let SIZE = 4;
+export let COLS = 4;   // 宽（列数）
+export let ROWS = 4;   // 高（行数）
 
-export const BOARD_SIZES = [3, 4, 5, 6, 7, 8] as const;
-export const MIN_BOARD = 3;
-export const MAX_BOARD = 8;
+export const MIN_BOARD = 2;
+export const MAX_BOARD = 16;
 
-export function setBoardSize(n: number): void {
-  const v = Math.round(n);
-  if (!Number.isFinite(v) || v < MIN_BOARD || v > MAX_BOARD) {
-    throw new Error(`棋盘边长需在 ${MIN_BOARD}–${MAX_BOARD} 之间，收到 ${n}`);
-  }
-  SIZE = v;
+/** 常见预设，UI 里做成按钮 */
+export const BOARD_PRESETS: Array<[number, number]> = [
+  [4, 4],
+  [6, 6],
+  [8, 8],
+  [16, 2],
+];
+
+export function setBoardSize(cols: number, rows: number): void {
+  const c = Math.round(cols);
+  const r = Math.round(rows);
+  const bad = (v: number, name: string): never => {
+    throw new Error(
+      `棋盘${name}需在 ${MIN_BOARD}–${MAX_BOARD} 之间，收到 ${v}`,
+    );
+  };
+  if (!Number.isFinite(c) || c < MIN_BOARD || c > MAX_BOARD) bad(c, "宽");
+  if (!Number.isFinite(r) || r < MIN_BOARD || r > MAX_BOARD) bad(r, "高");
+  COLS = c;
+  ROWS = r;
 }
 
-/** 是否为 2 的幂次。1 也算（2^0），用于「随机生成值」的合法性和取值。 */
+/** 是否为 2 的幂次。1 也算（2^0）。 */
 export function isPowerOfTwo(v: number): boolean {
   return Number.isInteger(v) && v >= 1 && (v & (v - 1)) === 0;
 }
+
+/* ============================================================
+   新方块生成
+   ============================================================ */
+
+/** 生成值的允许范围：只接受 2 与 4 这两个幂次 */
+export const SPAWN_ALLOWED = [2, 4] as const;
+export const SPAWN_MIN_LIMIT = 2;
+export const SPAWN_MAX_LIMIT = 4;
+
+/**
+ * 生成值的分布方式。
+ *   uniform   区间内所有取值等概率
+ *   weighted  权重为值的倒数 —— 越大的值越罕见
+ */
+export type SpawnDist = "uniform" | "weighted";
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -135,6 +165,12 @@ export interface BackendConfig {
 export type Strategy = "greedy" | "sample" | "threshold";
 
 /** 一回合记录：既供置信度图表采样，也供日志面板回看完整请求 */
+/** 棋盘尺寸的快照，供日志与存档记录 */
+export interface BoardDims {
+  cols: number;
+  rows: number;
+}
+
 export interface TurnLog {
   turn: number;
   move: Direction;

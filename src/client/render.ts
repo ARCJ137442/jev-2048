@@ -8,7 +8,7 @@
  *
  * 视觉：暖橙色阶，暗褐 → 琥珀 → 金黄，靠明度对比区分空格子与数字格。
  */
-import { SIZE, type Direction, type Tile } from "../shared/types.js";
+import { COLS, ROWS, type Direction, type Tile } from "../shared/types.js";
 
 interface Swatch {
   bg: string;
@@ -113,7 +113,10 @@ export class BoardRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly visuals = new Map<number, Visual>();
   private particles: Particle[] = [];
-  private cssSize = 0;
+  /** 棋盘 CSS 尺寸（矩形，不再是正方形） */
+  private cssW = 0;
+  private cssH = 0;
+  private cellPx = 0;
   private dpr = 1;
   private raf = 0;
   private lastTs = 0;
@@ -128,33 +131,73 @@ export class BoardRenderer {
     this.ctx = ctx;
   }
 
-  resize(cssSize: number): void {
-    if (cssSize <= 0) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    if (cssSize === this.cssSize && dpr === this.dpr) return;
+  /**
+   * 按可用空间算出棋盘该多大。
+   *
+   * 几何全部以**格子边长 c** 为基准：
+   *   pad = PAD_K · c，gap = GAP_K · c
+   *   宽 = c·(2·PAD_K + COLS + (COLS−1)·GAP_K)
+   *   高 = c·(2·PAD_K + ROWS + (ROWS−1)·GAP_K)
+   *
+   * 矩形棋盘的关键：c 由宽高两个约束**共同**决定，取较小者 ——
+   * 否则 16×2 这种极端比例会横向溢出。
+   *
+   * ⚠ PAD_K / GAP_K 是从旧版反解出来的，不能凭感觉改。
+   * 旧版写的是 `pad = 画布边长 × 0.028`、`gap = pad × 0.62`，
+   * 而这里的比例基准是**格子**。直接照搬那两个数字（曾真实发生过）
+   * 会让 gap 变成 pad 的 20 倍，瓷砖被挤成细条。
+   *
+   * 旧版 4×4 反解结果：pad/cell = 0.12560、gap/cell = 0.07786。
+   * 用这组常数，4×4 的几何与原版**逐像素一致**。
+   *
+   * @returns 是否发生了实际变化
+   */
+  resize(availW: number, availH: number): boolean {
+    if (availW <= 0 || availH <= 0) return false;
 
-    this.cssSize = cssSize;
+    const small = COLS <= 4 && ROWS <= 4;
+    const PAD_K = 0.1256;
+    // 大棋盘旧版用 gap = pad × 0.5 → 0.1256 × 0.5 = 0.0628
+    const GAP_K = small ? 0.07786 : 0.0628;
+
+    const wUnits = 2 * PAD_K + COLS + (COLS - 1) * GAP_K;
+    const hUnits = 2 * PAD_K + ROWS + (ROWS - 1) * GAP_K;
+    const cell = Math.floor(Math.min(availW / wUnits, availH / hUnits));
+    if (cell < 4) return false;                        // 太小，放弃本次
+
+    const cssW = Math.round(cell * wUnits);
+    const cssH = Math.round(cell * hUnits);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+
+    if (cssW === this.cssW && cssH === this.cssH && dpr === this.dpr) return false;
+
+    this.cssW = cssW;
+    this.cssH = cssH;
+    this.cellPx = cell;
     this.dpr = dpr;
-    this.canvas.width = Math.round(cssSize * dpr);
-    this.canvas.height = Math.round(cssSize * dpr);
-    this.canvas.style.width = `${cssSize}px`;
-    this.canvas.style.height = `${cssSize}px`;
+
+    this.canvas.width = Math.round(cssW * dpr);
+    this.canvas.height = Math.round(cssH * dpr);
+    this.canvas.style.width = `${cssW}px`;
+    this.canvas.style.height = `${cssH}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.draw();
+    return true;
   }
 
   /* ---------- 几何：等距由构造保证 ---------- */
 
+  // 与 resize() 里的常数保持同源，改一处必须改另一处
   private get pad(): number {
-    return this.cssSize * 0.028;
+    return this.cellPx * 0.1256;
   }
 
   private get gap(): number {
-    return this.pad * (SIZE <= 4 ? 0.62 : 0.5);
+    return this.cellPx * (COLS <= 4 && ROWS <= 4 ? 0.07786 : 0.0628);
   }
 
   private get cell(): number {
-    return (this.cssSize - this.pad * 2 - this.gap * (SIZE - 1)) / SIZE;
+    return this.cellPx;
   }
 
   /** 格坐标 → 像素坐标（格子左上角）。入参应为整数格索引。 */
@@ -259,7 +302,7 @@ export class BoardRenderer {
    *               未参与的格子保持干净 —— 粒子因此读起来像「瓷砖划过的轨迹」。
    */
   burst(dir: Direction, cells: Array<{ row: number; col: number }>): void {
-    if (!this.animations || !this.particlesEnabled || this.cssSize <= 0) return;
+    if (!this.animations || !this.particlesEnabled || this.cssW <= 0) return;
     if (cells.length === 0) return;
 
     const vertical = dir === "up" || dir === "down";
@@ -365,23 +408,23 @@ export class BoardRenderer {
 
   private draw(): void {
     const ctx = this.ctx;
-    const S = this.cssSize;
-    if (S <= 0) return;
+    const W = this.cssW;
+    const H = this.cssH;
+    if (W <= 0 || H <= 0) return;
 
-    ctx.clearRect(0, 0, S, S);
+    ctx.clearRect(0, 0, W, H);
 
-    const n = SIZE;
     const c = this.cell;
     const r = c * 0.15;
 
-    // 棋盘底板
+    // 棋盘底板（矩形）
     ctx.fillStyle = "#141210";
-    roundRect(ctx, 0, 0, S, S, S * 0.032);
+    roundRect(ctx, 0, 0, W, H, Math.min(W, H) * 0.032);
     ctx.fill();
 
     // 空格子：更暗的井 + 极淡描边
-    for (let row = 0; row < n; row++) {
-      for (let col = 0; col < n; col++) {
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
         const { x, y } = this.px(col, row);
         ctx.fillStyle = "#0d0c0a";
         roundRect(ctx, x, y, c, c, r);

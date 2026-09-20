@@ -3,8 +3,10 @@
  *
  * 注意：这些函数**只用于描述局面**（写进发给 Jev 的 state.features），
  * 不参与任何决策。本 Demo 不做启发式决策 —— 阈值由用户看着置信度图自己调。
+ *
+ * 棋盘为矩形（COLS × ROWS），所有遍历都要分别取宽高。
  */
-import { SIZE, type Grid, type Tile } from "../shared/types.js";
+import { COLS, ROWS, type Grid, type Tile } from "../shared/types.js";
 
 export function countEmpty(grid: Grid): number {
   let n = 0;
@@ -18,31 +20,52 @@ export function countEmpty(grid: Grid): number {
  */
 export function monotonicity(grid: Grid): number {
   const l2 = (v: number): number => Math.log2(Math.max(v, 1));
-  const n = SIZE;
   let total = 0;
 
-  for (let i = 0; i < n; i++) {
+  // 横向：逐行
+  for (let r = 0; r < ROWS; r++) {
     let inc = 0;
     let dec = 0;
-    for (let j = 0; j + 1 < n; j++) {
-      const a = l2(grid[i][j]);
-      const b = l2(grid[i][j + 1]);
-      if (a > b) dec += b - a;
-      else inc += a - b;
-    }
-    total += Math.max(inc, dec);
-
-    inc = 0;
-    dec = 0;
-    for (let j = 0; j + 1 < n; j++) {
-      const a = l2(grid[j][i]);
-      const b = l2(grid[j + 1][i]);
+    for (let c = 0; c + 1 < COLS; c++) {
+      const a = l2(grid[r][c]);
+      const b = l2(grid[r][c + 1]);
       if (a > b) dec += b - a;
       else inc += a - b;
     }
     total += Math.max(inc, dec);
   }
+
+  // 纵向：逐列
+  for (let c = 0; c < COLS; c++) {
+    let inc = 0;
+    let dec = 0;
+    for (let r = 0; r + 1 < ROWS; r++) {
+      const a = l2(grid[r][c]);
+      const b = l2(grid[r + 1][c]);
+      if (a > b) dec += b - a;
+      else inc += a - b;
+    }
+    total += Math.max(inc, dec);
+  }
+
   return total;
+}
+
+/** 最大方块是否位于四角之一 */
+export function maxInCorner(grid: Grid): boolean {
+  let mx = 0;
+  let mr = 0;
+  let mc = 0;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (grid[r][c] > mx) {
+        mx = grid[r][c];
+        mr = r;
+        mc = c;
+      }
+    }
+  }
+  return (mr === 0 || mr === ROWS - 1) && (mc === 0 || mc === COLS - 1);
 }
 
 /**
@@ -54,7 +77,7 @@ export function monotonicity(grid: Grid): number {
  * 所以这里按每个方块的**原位置 → 目标位置逐格标记**：
  *   - 存活且位移过的方块：标记整条路径（含起点与终点）
  *   - 合并产生的新方块、新生成的方块：标记其所在格
- *   - 被合并吃掉的源方块：标记其原位置
+ *   - 被合并吃掉的方块：起点在 before、终点写在 dying 上，同样要标整条路径
  *
  * 结果是一个去重后的格子集合，正好覆盖这一手所有「有东西动过」的位置。
  */
@@ -88,7 +111,6 @@ export function trajectoryCells(
   for (const t of after) {
     const p = prev.get(t.id);
     if (!p) {
-      // 合并产物或新生成的方块：只标它出现的这一格
       mark(t.row, t.col);
       continue;
     }
@@ -96,7 +118,7 @@ export function trajectoryCells(
     trace(p.row, p.col, t.row, t.col);
   }
 
-  // 被合并吃掉的方块：起点在 before，终点是 moveTiles 写在 dying 上的目标格。
+  // 被合并吃掉的方块：终点是 moveTiles 写在 dying 上的目标格。
   // 这条路径不能省 —— 从远处滑过来参与合并的方块，轨迹同样要完整。
   for (const d of dying) {
     const p = prev.get(d.id);
@@ -111,22 +133,4 @@ export function trajectoryCells(
     const [r, c] = s.split(",");
     return { row: Number(r), col: Number(c) };
   });
-}
-
-/** 最大方块是否位于四角之一 */
-export function maxInCorner(grid: Grid): boolean {
-  const n = SIZE;
-  let mx = 0;
-  let mr = 0;
-  let mc = 0;
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if (grid[r][c] > mx) {
-        mx = grid[r][c];
-        mr = r;
-        mc = c;
-      }
-    }
-  }
-  return (mr === 0 || mr === n - 1) && (mc === 0 || mc === n - 1);
 }

@@ -25,18 +25,27 @@ import type { SessionInput } from "../client/session.js";
 
 function makeStore(): Persisted {
   return {
-    game: { ...DEFAULT_GAME, boardSize: 6, spawnMin: 2, spawnMax: 4, strategy: "sample", threshold: 0.4, memory: 8 },
+    game: {
+      ...DEFAULT_GAME,
+      boardWidth: 6,
+      boardHeight: 5,
+      strategy: "sample",
+      threshold: 0.4,
+      memory: 8,
+    },
     context: { ...DEFAULT_CONTEXT, ruleDesc: "测试规则", strategyHint: "测试提示", consequences: false },
     api: { retryMax: 5, retryBaseMs: 1200 },
-    highScores: { "4": 100, "6": 250 },
-    bestTiles: { "4": 64, "6": 128 },
-    lastSize: 6,
+    highScores: { "4x4": 100, "6x5": 250 },
+    bestTiles: { "4x4": 64, "6x5": 128 },
+    lastWidth: 6,
+    lastHeight: 5,
   };
 }
 
 function makeSession(): SessionInput {
   return {
-    size: 6,
+    cols: 6,
+    rows: 5,
     tiles: [
       { id: 1, value: 2, row: 0, col: 0 },
       { id: 9, value: 4, row: 5, col: 5 },
@@ -84,8 +93,8 @@ test("buildArchive：game 档带对局与历史纪录", () => {
   const r = extract(buildArchive("game", makeStore(), makeSession(), []));
   assert.equal(r.session?.turn, 17);
   assert.equal(r.session?.score, 321);
-  assert.equal(r.highScores?.["6"], 250);
-  assert.equal(r.bestTiles?.["4"], 64);
+  assert.equal(r.highScores?.["6x5"], 250);
+  assert.equal(r.bestTiles?.["4x4"], 64);
   assert.equal(r.hasScores, true);
 });
 

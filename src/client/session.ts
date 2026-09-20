@@ -19,13 +19,14 @@ const SAVE_DEBOUNCE_MS = 300;
 const MAX_PERSISTED_HISTORY = 150;
 
 /** schema 版本。字段结构变更时递增 —— 旧档据此判定为不兼容。 */
-export const SESSION_VERSION = 1;
+export const SESSION_VERSION = 2;
 
 export interface Session {
   /** schema 版本 */
   v: number;
-  /** 存档时的棋盘边长。与当前设置不一致时整局作废。 */
-  size: number;
+  /** 存档时的棋盘宽高。与当前设置不一致时整局作废。 */
+  cols: number;
+  rows: number;
   tiles: Tile[];
   score: number;
   turn: number;
@@ -92,7 +93,9 @@ export function loadSession(): LoadResult {
 
   // 结构校验：核心字段缺一不可
   const bad = (why: string): LoadResult => ({ status: "incompatible", raw, reason: why });
-  if (typeof o.size !== "number") return bad("存档缺少棋盘尺寸");
+  if (typeof o.cols !== "number" || typeof o.rows !== "number") {
+    return bad("存档缺少棋盘宽高");
+  }
   if (!Array.isArray(o.tiles)) return bad("存档的方块列表已损坏");
   if (typeof o.score !== "number") return bad("存档缺少分数");
   if (typeof o.turn !== "number") return bad("存档缺少轮次");
@@ -113,7 +116,8 @@ export function loadSession(): LoadResult {
     status: "ok",
     session: {
       v: Number.isFinite(v) ? v : 0,
-      size: o.size,
+      cols: o.cols,
+      rows: o.rows,
       tiles,
       score: o.score,
       turn: o.turn,
@@ -233,11 +237,16 @@ export function forceLoadSession(raw: string): { session: Session; salvaged: str
     return Number.isFinite(n) ? n : d;
   };
 
-  const size = num(r.size, 4);
+  // 兼容 v1 存档的单值 size（正方形棋盘）
+  const legacySquare = num(r.size, 4);
+  const cols = num(r.cols, legacySquare);
+  const rows = num(r.rows, legacySquare);
   const score = num(r.score, 0);
   const turn = num(r.turn, 0);
 
-  if (!Number.isFinite(Number(r.size))) salvaged.push("棋盘尺寸已用默认值 4");
+  if (!Number.isFinite(Number(r.cols)) && !Number.isFinite(Number(r.size))) {
+    salvaged.push("棋盘宽高已用默认值 4×4");
+  }
   if (!Number.isFinite(Number(r.score))) salvaged.push("分数已归零");
   if (!Number.isFinite(Number(r.turn))) salvaged.push("轮次已归零");
 
@@ -249,7 +258,8 @@ export function forceLoadSession(raw: string): { session: Session; salvaged: str
   return {
     session: {
       v: SESSION_VERSION,
-      size,
+      cols,
+      rows,
       tiles,
       score,
       turn,

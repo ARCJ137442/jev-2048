@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node node_modules/typescript/bin/tsc -p tsconfig.client.json",
+  "outputDirectory": "public",
+  "framework": null,
+  "functions": {
+    "api/evaluate.ts": {
+      "memory": 256,
+      "maxDuration": 60
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
+  ]
+}

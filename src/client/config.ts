@@ -4,16 +4,26 @@
  * 写入 localStorage 的只有**非敏感**内容：游戏设置、上下文文本、历史最高分。
  * API Key 绝不落盘 —— 它只存在于内存（代理模式下更是连浏览器都拿不到）。
  */
-import { MAX_BOARD, MIN_BOARD, isPowerOfTwo } from "../shared/types.js";
+import {
+  MAX_BOARD,
+  MIN_BOARD,
+  SPAWN_ALLOWED,
+  type SpawnDist,
+} from "../shared/types.js";
 
 const KEY = "jev2048.v1";
 
 export interface GameSettings {
-  boardSize: number;
-  /** 新方块取值区间的下界（2 的幂次，>=1） */
+  /** 棋盘宽（列数），与高独立 */
+  boardWidth: number;
+  /** 棋盘高（行数），与宽独立 */
+  boardHeight: number;
+  /** 新方块取值区间的下界（只接受 2 或 4） */
   spawnMin: number;
-  /** 上界（2 的幂次），null 表示不限 */
-  spawnMax: number | null;
+  /** 上界（只接受 2 或 4） */
+  spawnMax: number;
+  /** 生成值的分布：等概率，或权重为值的倒数（越大的越罕见） */
+  spawnDist: SpawnDist;
   /**
    * 开局时随机摆放的瓷砖个数区间。
    *
@@ -52,13 +62,16 @@ export interface Persisted {
   /** 各棋盘尺寸下达成过的最大瓷砖值 */
   bestTiles: Record<string, number>;
   /** 上一局用的棋盘尺寸，便于启动时恢复 */
-  lastSize: number;
+  lastWidth: number;
+  lastHeight: number;
 }
 
 export const DEFAULT_GAME: GameSettings = {
-  boardSize: 4,
+  boardWidth: 4,
+  boardHeight: 4,
   spawnMin: 2,
-  spawnMax: 2,
+  spawnMax: 4,
+  spawnDist: "uniform",
   initialMin: 1,
   initialMax: 2,
   animations: true,
@@ -70,7 +83,7 @@ export const DEFAULT_GAME: GameSettings = {
 };
 
 export const DEFAULT_CONTEXT: ContextSettings = {
-  ruleDesc: `你正在玩 2048 游戏。棋盘是 4×4 网格，0 表示空格。
+  ruleDesc: `你正在玩 2048 游戏。棋盘是矩形网格，0 表示空格。
 每次移动后，会在一个随机空位生成一个新方块。
 相同的两个方块相撞会合并成它们之和，并计入得分。目标是合并出 2048。`,
   strategyHint: `策略要点：
@@ -83,17 +96,38 @@ export const DEFAULT_CONTEXT: ContextSettings = {
 
 /* ---------- 校验 ---------- */
 
+/** 棋盘单边长度：夹在 [MIN_BOARD, MAX_BOARD] */
 export function clampBoardSize(v: unknown): number {
   const n = Math.round(Number(v));
-  if (!Number.isFinite(n)) return DEFAULT_GAME.boardSize;
+  if (!Number.isFinite(n)) return 4;
   return Math.min(MAX_BOARD, Math.max(MIN_BOARD, n));
 }
 
-/** 生成值必须是 2 的幂次且 >= 1；非法则回落到 2 */
+/**
+ * 生成值：只接受 2 或 4。
+ * 非法输入回落到最近的那个允许值（不抛错，配置面板要能容错）。
+ */
 export function clampSpawn(v: unknown): number {
   const n = Math.round(Number(v));
-  if (!Number.isFinite(n) || n < 1 || !isPowerOfTwo(n)) return 2;
-  return n;
+  if (!Number.isFinite(n)) return SPAWN_ALLOWED[0];
+  let best: number = SPAWN_ALLOWED[0];
+  for (const a of SPAWN_ALLOWED) {
+    if (Math.abs(a - n) < Math.abs(best - n)) best = a;
+  }
+  return best;
+}
+
+/** 生成分布：只认 uniform / weighted */
+export function clampDist(v: unknown): SpawnDist {
+  return v === "weighted" ? "weighted" : "uniform";
+}
+
+/**
+ * 历史纪录的键。矩形棋盘下 `"4"` 这种单数字键不再够用，改用 `"宽x高"`。
+ * 旧版本的单数字键在读取时会自然落空（视为无纪录），不会读到错位的数值。
+ */
+export function dimKey(cols: number, rows: number): string {
+  return `${cols}x${rows}`;
 }
 
 /** 初始瓷砖个数的上限护栏（棋盘再大也不该开局铺满） */
@@ -158,16 +192,21 @@ export function load(): Persisted {
   const g = (o?.game ?? {}) as Partial<GameSettings>;
   const c = (o?.context ?? {}) as Partial<ContextSettings>;
   const a = (o?.api ?? {}) as Partial<ApiSettings>;
+  const legacyLast = (o as Record<string, unknown> | null)?.lastSize as number | undefined;
 
+  // 兼容旧字段名：早期版本用 boardSize（正方形）
+  const legacy = g as Record<string, unknown>;
   const spawnMin = clampSpawn(g.spawnMin ?? DEFAULT_GAME.spawnMin);
-  const rawMax = g.spawnMax === null || g.spawnMax === undefined ? null : clampSpawn(g.spawnMax);
+  const rawMax = clampSpawn(g.spawnMax ?? DEFAULT_GAME.spawnMax);
 
   return {
     game: {
-      boardSize: clampBoardSize(g.boardSize ?? DEFAULT_GAME.boardSize),
+      boardWidth: clampBoardSize(g.boardWidth ?? legacy.boardSize ?? DEFAULT_GAME.boardWidth),
+      boardHeight: clampBoardSize(g.boardHeight ?? legacy.boardSize ?? DEFAULT_GAME.boardHeight),
       spawnMin,
       // 上界不得小于下界
-      spawnMax: rawMax === null ? null : Math.max(spawnMin, rawMax),
+      spawnMax: Math.max(spawnMin, rawMax),
+      spawnDist: clampDist(g.spawnDist),
       initialMin: clampInitial(g.initialMin, DEFAULT_GAME.initialMin),
       initialMax: Math.max(
         clampInitial(g.initialMin, DEFAULT_GAME.initialMin),
@@ -202,7 +241,8 @@ export function load(): Persisted {
       o?.highScores && typeof o.highScores === "object" ? { ...o.highScores } : {},
     bestTiles:
       o?.bestTiles && typeof o.bestTiles === "object" ? { ...o.bestTiles } : {},
-    lastSize: clampBoardSize(o?.lastSize ?? DEFAULT_GAME.boardSize),
+    lastWidth: clampBoardSize(o?.lastWidth ?? legacyLast ?? DEFAULT_GAME.boardWidth),
+    lastHeight: clampBoardSize(o?.lastHeight ?? legacyLast ?? DEFAULT_GAME.boardHeight),
   };
 }
 
@@ -216,30 +256,30 @@ export function save(p: Persisted): void {
 
 /* ---------- 历史最高 ---------- */
 
-export function highScoreFor(p: Persisted, size: number): number {
-  return Number(p.highScores[String(size)] ?? 0) || 0;
+export function highScoreFor(p: Persisted, cols: number, rows: number): number {
+  return Number(p.highScores[dimKey(cols, rows)] ?? 0) || 0;
 }
 
 /** 返回是否刷新了纪录 */
-export function recordScore(p: Persisted, size: number, score: number): boolean {
-  const cur = highScoreFor(p, size);
+export function recordScore(p: Persisted, cols: number, rows: number, score: number): boolean {
+  const cur = highScoreFor(p, cols, rows);
   if (score > cur) {
-    p.highScores[String(size)] = score;
+    p.highScores[dimKey(cols, rows)] = score;
     save(p);
     return true;
   }
   return false;
 }
 
-export function bestTileFor(p: Persisted, size: number): number {
-  return Number(p.bestTiles[String(size)] ?? 0) || 0;
+export function bestTileFor(p: Persisted, cols: number, rows: number): number {
+  return Number(p.bestTiles[dimKey(cols, rows)] ?? 0) || 0;
 }
 
 /** 返回是否刷新了最大瓷砖纪录 */
-export function recordTile(p: Persisted, size: number, tile: number): boolean {
-  const cur = bestTileFor(p, size);
+export function recordTile(p: Persisted, cols: number, rows: number, tile: number): boolean {
+  const cur = bestTileFor(p, cols, rows);
   if (tile > cur) {
-    p.bestTiles[String(size)] = tile;
+    p.bestTiles[dimKey(cols, rows)] = tile;
     save(p);
     return true;
   }
