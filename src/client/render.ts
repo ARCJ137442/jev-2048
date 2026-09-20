@@ -87,6 +87,17 @@ const PARTICLE_PER_CELL_MAX = 4;
 const PARTICLE_SIZE_MIN = 0.32;
 const PARTICLE_SIZE_MAX = 0.56;
 
+/**
+ * 外边距与内间距相对**格子边长**的比例。
+ *
+ * 两者刻意取同一个值 —— 这样格子之间的节奏与四周留白一致，
+ * 整个棋盘读起来是一个规整的格阵，而不是「被一圈宽边包住的方阵」。
+ *
+ * 0.0905 介于旧版 4×4 的 pad(0.1256) 与 gap(0.0779) 之间：
+ * 外边距略微收紧、内间距略微放宽，格子的实际尺寸几乎不变。
+ */
+const GUTTER_K = 0.0905;
+
 const GLYPH: Record<Direction, string> = { up: "↑", down: "↓", left: "←", right: "→" };
 
 const ARROW_COLOR = "#ffcf6b";
@@ -135,33 +146,29 @@ export class BoardRenderer {
    * 按可用空间算出棋盘该多大。
    *
    * 几何全部以**格子边长 c** 为基准：
-   *   pad = PAD_K · c，gap = GAP_K · c
-   *   宽 = c·(2·PAD_K + COLS + (COLS−1)·GAP_K)
-   *   高 = c·(2·PAD_K + ROWS + (ROWS−1)·GAP_K)
+   *   pad = GUTTER_K · c，gap = GUTTER_K · c
+   *   宽 = c·(2·GUTTER_K + COLS + (COLS−1)·GUTTER_K)
+   *   高 = c·(2·GUTTER_K + ROWS + (ROWS−1)·GUTTER_K)
    *
    * 矩形棋盘的关键：c 由宽高两个约束**共同**决定，取较小者 ——
    * 否则 16×2 这种极端比例会横向溢出。
    *
-   * ⚠ PAD_K / GAP_K 是从旧版反解出来的，不能凭感觉改。
-   * 旧版写的是 `pad = 画布边长 × 0.028`、`gap = pad × 0.62`，
-   * 而这里的比例基准是**格子**。直接照搬那两个数字（曾真实发生过）
-   * 会让 gap 变成 pad 的 20 倍，瓷砖被挤成细条。
+   * ⚠ 外边距与内间距取**同一个常数**，这不是偷懒：
+   * 早期版本里 gap 只有 pad 的 0.62 倍，视觉上棋盘像「被一圈宽边包住的紧凑方阵」，
+   * 而不是一个规整的格阵。两者相等时，格子之间的节奏才和四周留白一致。
    *
-   * 旧版 4×4 反解结果：pad/cell = 0.12560、gap/cell = 0.07786。
-   * 用这组常数，4×4 的几何与原版**逐像素一致**。
+   * ⚠ 这个常数不能凭感觉改。旧版写的是 `pad = 画布边长 × 0.028`、`gap = pad × 0.62`，
+   * 而这里的基准是**格子**。直接照搬那两个数字（曾真实发生过）会让 gap 变成
+   * pad 的 20 倍，瓷砖被挤成细条。0.0905 是从旧版 4×4 的视觉密度反推的：
+   * 原 pad 占格子 12.56%，取其中间偏内的值，保证格子本身不缩水太多。
    *
    * @returns 是否发生了实际变化
    */
   resize(availW: number, availH: number): boolean {
     if (availW <= 0 || availH <= 0) return false;
 
-    const small = COLS <= 4 && ROWS <= 4;
-    const PAD_K = 0.1256;
-    // 大棋盘旧版用 gap = pad × 0.5 → 0.1256 × 0.5 = 0.0628
-    const GAP_K = small ? 0.07786 : 0.0628;
-
-    const wUnits = 2 * PAD_K + COLS + (COLS - 1) * GAP_K;
-    const hUnits = 2 * PAD_K + ROWS + (ROWS - 1) * GAP_K;
+    const wUnits = 2 * GUTTER_K + COLS + (COLS - 1) * GUTTER_K;
+    const hUnits = 2 * GUTTER_K + ROWS + (ROWS - 1) * GUTTER_K;
     const cell = Math.floor(Math.min(availW / wUnits, availH / hUnits));
     if (cell < 4) return false;                        // 太小，放弃本次
 
@@ -187,13 +194,13 @@ export class BoardRenderer {
 
   /* ---------- 几何：等距由构造保证 ---------- */
 
-  // 与 resize() 里的常数保持同源，改一处必须改另一处
+  // 与 resize() 同源，改一处必须改另一处
   private get pad(): number {
-    return this.cellPx * 0.1256;
+    return this.cellPx * GUTTER_K;
   }
 
   private get gap(): number {
-    return this.cellPx * (COLS <= 4 && ROWS <= 4 ? 0.07786 : 0.0628);
+    return this.cellPx * GUTTER_K;
   }
 
   private get cell(): number {

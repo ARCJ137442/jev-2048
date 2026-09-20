@@ -13,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { unseal } from "./seal.js";
 
 /* ═══════════ 配置 ═══════════ */
 
@@ -20,6 +21,8 @@ import { fileURLToPath } from "node:url";
 const HERE = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PUBLIC_DIR = join(HERE, "public");
 const KEY_FILE = join(HERE, "..", "local", "vercel-secret-api-key");
+/** 封存后的密钥文件。存在时优先于明文文件。 */
+const SEALED_KEY_FILE = `${KEY_FILE}.sealed`;
 
 const GATEWAY = "https://ai-gateway.vercel.sh/v1/evaluate";
 const DEFAULT_MODEL = "typesafe-ai/jev";
@@ -41,24 +44,45 @@ const MIME: Record<string, string> = {
 
 /* ═══════════ 密钥 ═══════════ */
 
-function loadApiKey(): string {
+/**
+ * 按优先级取密钥：
+ *   1. 环境变量 VERCEL_AI_GATEWAY_KEY   —— 最干净，密钥不落盘
+ *   2. 封存文件 *.sealed                —— 磁盘上只有密文
+ *   3. 明文文件                          —— 兼容旧布置，启动时提醒
+ */
+function loadApiKey(): { key: string; source: string } {
   const env = (process.env.VERCEL_AI_GATEWAY_KEY ?? "").trim();
-  if (env) return env;
+  if (env) return { key: env, source: "环境变量 VERCEL_AI_GATEWAY_KEY" };
 
-  if (!existsSync(KEY_FILE)) {
-    console.error(`[致命] 找不到密钥文件：${KEY_FILE}`);
-    console.error(`       可改用环境变量 VERCEL_AI_GATEWAY_KEY=xxx 启动。`);
+  if (existsSync(SEALED_KEY_FILE)) {
+    const sealed = readFileSync(SEALED_KEY_FILE, "utf8").trim();
+    const key = unseal(sealed);
+    if (key && key.trim()) {
+      return { key: key.trim(), source: `${SEALED_KEY_FILE}（已封存）` };
+    }
+    console.error(`[致命] 封存密钥解不开：${SEALED_KEY_FILE}`);
+    console.error(`       口令不对，或文件被改动过。`);
+    console.error(`       若换过口令，请设 JEV_SEAL_PASSPHRASE 后重试。`);
     process.exit(1);
   }
+
+  if (!existsSync(KEY_FILE)) {
+    console.error(`[致命] 找不到密钥。按优先级依次尝试过：`);
+    console.error(`       1. 环境变量 VERCEL_AI_GATEWAY_KEY`);
+    console.error(`       2. ${SEALED_KEY_FILE}`);
+    console.error(`       3. ${KEY_FILE}`);
+    process.exit(1);
+  }
+
   const key = readFileSync(KEY_FILE, "utf8").trim();
   if (!key) {
     console.error(`[致命] 密钥文件为空：${KEY_FILE}`);
     process.exit(1);
   }
-  return key;
+  return { key, source: `${KEY_FILE}（明文，建议封存）` };
 }
 
-const API_KEY = loadApiKey();
+const { key: API_KEY, source: KEY_SOURCE } = loadApiKey();
 
 function masked(key: string): string {
   return key.length > 14 ? `${key.slice(0, 7)}${"*".repeat(12)}${key.slice(-4)}` : "***";
@@ -255,9 +279,7 @@ server.on("error", (e: NodeJS.ErrnoException) => {
 
 server.listen(port, "0.0.0.0", () => {
   const ip = lanIp();
-  const keySource = process.env.VERCEL_AI_GATEWAY_KEY
-    ? "环境变量 VERCEL_AI_GATEWAY_KEY"
-    : KEY_FILE;
+  const keySource = KEY_SOURCE;
 
   console.log(
     [

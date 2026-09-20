@@ -1457,16 +1457,25 @@ function refreshBackend(): void {
   const b = BACKENDS[selBackend.value as BackendId];
   $<HTMLInputElement>("inpBase").value = b.base;
   $<HTMLInputElement>("inpModel").value = b.model;
-  $("backendNote").textContent = (b.verified ? "✅ 已验证可用。" : "⚠ 未经实测验证。") + b.note;
 
-  if (b.needsKey) {
+  // 开箱即用的后端不暴露实现细节 —— 端点、模型 ID 这些是本站的内部选择，
+  // 用户既改不了也不需要知道，展示出来只会造成「我是不是配错了」的困惑。
+  const advanced = b.needsKey;
+  $("advancedApi").style.display = advanced ? "" : "none";
+  $("freeTrialNote").style.display = advanced ? "none" : "";
+  $("backendNote").textContent = advanced
+    ? (b.verified ? "✅ 已验证可用。" : "⚠ 未经实测验证。") + b.note
+    : "";
+  $("backendNote").style.display = advanced ? "" : "none";
+
+  if (advanced) {
     inpKey.disabled = false;
     inpKey.placeholder = "粘贴你的 API Key（仅存内存，刷新即清除）";
     inpKey.style.userSelect = "auto";
   } else {
     inpKey.disabled = true;
     inpKey.value = "";
-    inpKey.placeholder = "••••••••••　由本机服务器持有，不可查看";
+    inpKey.placeholder = "无需填写 —— 开箱即用";
     inpKey.style.userSelect = "none";
   }
 }
@@ -1635,7 +1644,8 @@ document.addEventListener("keydown", (e) => {
 for (const [id, b] of Object.entries(BACKENDS)) {
   const o = document.createElement("option");
   o.value = id;
-  o.textContent = `${b.label}${b.verified ? " ✓" : " (未验证)"}`;
+  // 开箱即用的后端不加「已验证」标记 —— 那是在暗示它背后有可验证的第三方服务
+  o.textContent = b.needsKey ? `${b.label}${b.verified ? " ✓" : " (未验证)"}` : b.label;
   selBackend.appendChild(o);
 }
 
@@ -1676,6 +1686,7 @@ function boot(): void {
     "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
     "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
     "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
+    "advancedApi", "freeTrialNote",
     "logList", "logCount", "bCopyAll", "bLogClear",
   ]);
 

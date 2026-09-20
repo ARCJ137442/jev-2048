@@ -772,8 +772,17 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 
     <div class="field"><label>后端</label><select id="selBackend"></select></div>
     <div class="field"><label>API Key</label><input type="password" id="inpKey" autocomplete="off"></div>
-    <div class="field"><label>Base URL</label><input type="text" id="inpBase"></div>
-    <div class="field"><label>Model ID</label><input type="text" id="inpModel"></div>
+    <div id="advancedApi">
+      <div class="field"><label>Base URL</label><input type="text" id="inpBase"></div>
+      <div class="field"><label>Model ID</label><input type="text" id="inpModel"></div>
+    </div>
+
+    <div class="field" id="freeTrialNote">
+      <label>说明</label>
+      <div class="desc" style="margin-bottom:0;line-height:1.7">
+        开箱即用，无需任何配置。额度有限，用尽时会有提示引导你换成自己的 Key。
+      </div>
+    </div>
 
     <div class="field">
       <label>自动重试</label>

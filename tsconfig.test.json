@@ -18,6 +18,7 @@
     "src/client/archive.ts",
     "src/client/config.ts",
     "src/client/session.ts",
+    "src/server/seal.ts",
     "src/shared/**/*.ts"
   ]
 }
