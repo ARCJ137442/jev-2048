@@ -71,7 +71,7 @@ export const DEFAULT_GAME: GameSettings = {
   boardHeight: 4,
   spawnMin: 2,
   spawnMax: 4,
-  spawnDist: "uniform",
+  spawnDist: "weighted",
   initialMin: 1,
   initialMax: 2,
   animations: true,
@@ -117,9 +117,9 @@ export function clampSpawn(v: unknown): number {
   return best;
 }
 
-/** 生成分布：只认 uniform / weighted */
+/** 生成分布：只认 uniform / weighted；缺失时取默认（加权） */
 export function clampDist(v: unknown): SpawnDist {
-  return v === "weighted" ? "weighted" : "uniform";
+  return v === "uniform" ? "uniform" : "weighted";
 }
 
 /**
