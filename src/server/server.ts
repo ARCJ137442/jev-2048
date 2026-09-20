@@ -157,6 +157,12 @@ function send(res: ServerResponse, code: number, body: Buffer | string, ctype: s
     "Content-Type": ctype,
     "Content-Length": buf.length,
     "Cache-Control": "no-store",
+    // 允许跨域：静态托管下的页面（GitHub Pages / file://）可能来连本机调试。
+    // 与 Vercel 侧同理 —— 服务端不持有客户端任何数据，安全性不靠来源限制。
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
   });
   res.end(buf);
 }
@@ -288,6 +294,12 @@ function log(msg: string): void {
 
 const server = createServer((req, res) => {
   const path = (req.url ?? "/").split("?")[0];
+
+  // 跨域预检
+  if (req.method === "OPTIONS") {
+    send(res, 204, "", "text/plain");
+    return;
+  }
 
   if (req.method === "GET" && path === "/api/health") {
     // 只回显脱敏形态与「哪个上游可用」，绝不返回密钥本身

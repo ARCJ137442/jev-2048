@@ -61,6 +61,7 @@ import {
   type ClientConfig,
   type RetryPolicy,
 } from "./api.js";
+import { isStaticHosting } from "./api.js";
 import { resolveDecision } from "./decision.js";
 import { BoardRenderer } from "./render.js";
 import { ConfidenceChart } from "./chart.js";
@@ -1720,10 +1721,11 @@ for (const [id, b] of Object.entries(BACKENDS)) {
 }
 
 const served = location.protocol === "http:" || location.protocol === "https:";
+const staticHost = isStaticHosting();
 if (served) {
   selBackend.value = "localproxy";
   state.cfg = { provider: "localproxy", base: "/api/evaluate", model: "typesafe-ai/jev", apiKey: "" };
-  $("backend").textContent = "本机代理 · typesafe-ai/jev";
+  $("backend").textContent = staticHost ? "免费试用（远端）" : "免费试用";
   setLed("", "就绪");
 } else {
   selBackend.value = "vercel";

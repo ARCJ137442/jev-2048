@@ -19,6 +19,47 @@ import type {
   Questions,
 } from "../shared/types.js";
 
+/* ══════════════ 静态托管支持 ══════════════ */
+
+/**
+ * 远端免费试用端点的地址。
+ *
+ * 纯静态托管（GitHub Pages、任意静态空间、file://）没有同源的服务端函数，
+ * 所以「免费试用」类后端必须指向别处 —— 也就是 Vercel 上的那份部署。
+ *
+ * **这不是把密钥搬进静态文件**：静态页面只发请求，密钥仍在 Vercel 的函数进程里。
+ * 部署到自己的域名后，把这个常量改成你的地址即可。
+ */
+export const REMOTE_PROXY_BASE = "https://jev-2048.vercel.app";
+
+/**
+ * 当前是否跑在「没有同源服务端」的环境里。
+ *
+ * 判据是 hostname 而不是探测请求：探测要等一次网络往返，
+ * 而首屏就要决定后端可选列表，探测会让界面先闪一下再修正。
+ */
+export function isStaticHosting(): boolean {
+  if (typeof location === "undefined") return false;
+  if (location.protocol === "file:") return true;
+  // GitHub Pages 的地址形如 <user>.github.io
+  if (location.hostname.endsWith(".github.io")) return true;
+  return false;
+}
+
+/**
+ * 把代理路径解析成实际可用的地址。
+ *
+ *   /api/evaluate  →  同源部署下原样返回（本机服务器 / Vercel 自身）
+ *                  →  静态托管下拼上远端前缀
+ *
+ * 绝对 URL（直连各类网关）原样返回。
+ */
+export function resolveBase(base: string): string {
+  if (!base.startsWith("/")) return base;
+  if (!isStaticHosting()) return base;
+  return REMOTE_PROXY_BASE.replace(/\/$/, "") + base;
+}
+
 export const BACKENDS: Record<BackendId, BackendConfig> = {
   localproxy: {
     label: "免费试用",
@@ -179,18 +220,19 @@ async function callOnce(
 ): Promise<EvalResult> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-  // 代理模式：密钥由本机服务器注入，浏览器既不持有也不发送
+  // 代理类后端（路径以 / 开头）：密钥由服务端注入，浏览器既不持有也不发送
   const isProxy = cfg.base.startsWith("/");
   if (cfg.apiKey && !isProxy) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
 
+  const url = resolveBase(cfg.base);
   const body: JevRequest = { model: cfg.model, state, questions };
 
   let res: Response;
   try {
-    res = await fetch(cfg.base, { method: "POST", headers, body: JSON.stringify(body) });
+    res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   } catch (e) {
     // 网络层失败（断网、CORS、DNS）—— 一律可重试
-    throw new JevError(`无法连接 ${cfg.base}：${(e as Error).message}`, undefined, true);
+    throw new JevError(`无法连接 ${url}：${(e as Error).message}`, undefined, true);
   }
 
   const text = await res.text();

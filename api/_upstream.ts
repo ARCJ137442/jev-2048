@@ -44,6 +44,28 @@ export interface Upstream {
 /** 请求体上限，防止被当成任意转发代理滥用 */
 const MAX_BODY = 256 * 1024;
 
+/**
+ * 允许跨域调用的来源。
+ *
+ * 为什么需要：项目可以部署在**纯静态托管**上（GitHub Pages 等），
+ * 那里没有服务端函数，静态页面只能跨域调用 Vercel 上的这份。
+ *
+ * 安全性由服务端保证，不由来源限制保证：
+ *   - 请求体里不含任何凭据（密钥在服务端注入）
+ *   - 就算别的站点来调，它消耗的也只是本站的免费额度，拿不到任何数据
+ * 所以这里用 `*` 而不是白名单 —— 白名单反而会在换了域名后静默失效。
+ */
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
+} as const;
+
+function applyCors(res: Res): void {
+  for (const [k, v] of Object.entries(CORS)) res.setHeader(k, v);
+}
+
 function mask(key: string): string {
   return key.length > 14 ? `${key.slice(0, 7)}${"*".repeat(12)}${key.slice(-4)}` : "***";
 }
@@ -60,6 +82,13 @@ function tokensOf(d: unknown): number {
 export function makeHandler(up: Upstream) {
   return async function handler(req: Req, res: Res): Promise<void> {
     res.setHeader("Cache-Control", "no-store");
+    applyCors(res);
+
+    // 浏览器的跨域预检：不带凭据，直接放行
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
 
     if (req.method === "GET") {
       // 健康检查：只回显「配没配」「脱敏形态」，绝不返回密钥本身

@@ -774,8 +774,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   <div class="body">
     <div class="warn">
       <b>密钥安全</b><br>
-      「本机代理」模式下 API Key 由服务器进程持有，浏览器全程接触不到。
-      切换到直连后端时，密钥会进入浏览器内存。
+      只有选「直连」类后端时才需要填写。密钥仅存于当前页面的内存，刷新即清除，不会写入本地存储。
     </div>
 
     <div class="field"><label>后端</label><select id="selBackend"></select></div>

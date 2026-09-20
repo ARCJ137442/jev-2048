@@ -1,0 +1,79 @@
+name: Deploy to GitHub Pages
+
+# 把纯静态的界面发布到 GitHub Pages。
+#
+# ⚠ GitHub Pages 只有静态文件，没有 Serverless Function ——
+#   所以「免费试用」后端在这里是**跨域调用 Vercel 上那份部署**。
+#   密钥仍然只在 Vercel 的函数进程里，静态页面拿不到任何凭据。
+#   远端地址由 src/client/api.ts 的 REMOTE_PROXY_BASE 决定。
+#
+# 需要在仓库 Settings → Pages 里把 Source 设为 "GitHub Actions"。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: 检查 DOM id 一致性
+        run: node tools/check-dom.ts
+
+      - name: 单元测试
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.test.json
+          node --test dist-test/test/*.test.js
+
+      - name: 编译客户端
+        # 只编译客户端 —— Pages 上没有服务端，dist/ 用不到
+        run: node node_modules/typescript/bin/tsc -p tsconfig.client.json
+
+      - name: 确认产物里不含密钥
+        run: |
+          if grep -rIl -E 'vck_[A-Za-z0-9]{20,}|sk-or-v1-[a-f0-9]{30,}' public/; then
+            echo "::error::静态产物里出现了疑似真实密钥，拒绝发布"
+            exit 1
+          fi
+          echo "✓ 静态产物干净"
+
+      - name: 准备 Pages 产物
+        run: |
+          # GitHub Pages 默认用 Jekyll 处理，会忽略下划线开头的文件。
+          # 我们不依赖 Jekyll，关掉它。
+          touch public/.nojekyll
+          # 没有服务端，给个 404 页面比浏览器默认的强
+          cp public/index.html public/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
