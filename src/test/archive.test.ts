@@ -19,6 +19,7 @@ import {
   DEFAULT_API,
   DEFAULT_CONTEXT,
   DEFAULT_GAME,
+  clampPace,
   type Persisted,
 } from "../client/config.js";
 import type { SessionInput } from "../client/session.js";
@@ -187,4 +188,26 @@ test("extract：api 兜底值与 DEFAULT_API 一致", () => {
   );
   const r = extract(partial);
   assert.deepEqual(r.api, DEFAULT_API);
+});
+
+/* ══════════════ 步进间隔的边界 ══════════════ */
+
+test("clampPace：0 必须原样返回（表示「不等待」而非「缺省」）", () => {
+  // 0 是 falsy。任何 `Number(v) || 默认值` 的写法都会把它吞掉，
+  // 于是用户选「最快」却悄悄回到 2 秒，且没有任何报错。
+  assert.equal(clampPace(0), 0);
+  assert.equal(clampPace("0"), 0);
+});
+
+test("clampPace：空串与缺失回落默认值，不能被当成 0", () => {
+  // Number("") === 0 且 isFinite(0) 为真 —— 不显式排除就会被解读成「最快」
+  for (const v of ["", null, undefined, "abc", NaN]) {
+    assert.equal(clampPace(v), DEFAULT_GAME.paceMs, `clampPace(${JSON.stringify(v)}) 应回落默认值`);
+  }
+});
+
+test("clampPace：夹在 [0, 5000]", () => {
+  assert.equal(clampPace(-100), 0);
+  assert.equal(clampPace(9999), 5000);
+  assert.equal(clampPace(2500), 2500);
 });

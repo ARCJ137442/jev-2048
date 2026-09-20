@@ -76,6 +76,7 @@ import {
   clampBoardSize,
   clampDist,
   clampInitial,
+  clampPace,
   clampSpawn,
   bestTileFor,
   highScoreFor,
@@ -1673,14 +1674,18 @@ const paceVal = $("paceVal");
  * 步进间隔是**实时控制**而非配置项 —— 它既不进请求，也不改变动作如何落实，
  * 只影响自动走棋的播放速度。所以只在棋盘下方留一个滑块，设置抽屉里不重复出现。
  */
+function paceLabel(ms: number): string {
+  return ms === 0 ? "最快" : `${(ms / 1000).toFixed(1)}s`;
+}
+
 function syncPaceUi(): void {
   paceSlider.value = String(store.game.paceMs);
-  paceVal.textContent = `${(store.game.paceMs / 1000).toFixed(1)}s`;
+  paceVal.textContent = paceLabel(store.game.paceMs);
 }
 
 paceSlider.addEventListener("input", () => {
-  store.game.paceMs = Number(paceSlider.value);
-  paceVal.textContent = `${(store.game.paceMs / 1000).toFixed(1)}s`;
+  store.game.paceMs = clampPace(paceSlider.value);
+  paceVal.textContent = paceLabel(store.game.paceMs);
   save(store);
 });
 

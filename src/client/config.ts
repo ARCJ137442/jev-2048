@@ -145,6 +145,22 @@ export function clampInitial(v: unknown, fallback: number): number {
   return Math.min(MAX_INITIAL, Math.max(1, n));
 }
 
+/**
+ * 步进间隔。下限是 **0** —— 那不是「没有间隔」，而是「不等待」：
+ * 上游响应多快就多快，用于测极限速度。
+ *
+ * 注意不能用 `Number(v) || 默认值` 兜底：0 是 falsy，会被吞掉换成默认值，
+ * 于是「选了最快」变成「回到 2 秒」，而且没有任何报错。
+ */
+export function clampPace(v: unknown): number {
+  // 空串要显式排掉：Number("") === 0 且 isFinite(0) 为真，
+  // 会被误判成「用户选了最快」。缺失与空串都该回落默认值。
+  if (v === "" || v === null || v === undefined) return DEFAULT_GAME.paceMs;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return DEFAULT_GAME.paceMs;
+  return Math.min(5000, Math.max(0, Math.round(n)));
+}
+
 /** 置信度门槛归一到 [0, 1] */
 export function clamp01(v: unknown): number {
   const n = Number(v);
@@ -214,7 +230,9 @@ export function load(): Persisted {
       ),
       animations: g.animations ?? DEFAULT_GAME.animations,
       particles: g.particles ?? DEFAULT_GAME.particles,
-      paceMs: Math.min(5000, Math.max(100, Number(g.paceMs) || DEFAULT_GAME.paceMs)),
+      // 下限为 0 = 不等待，上游多快就多快。旧存档里没有 0，但 
+      // `|| DEFAULT` 会把 0 当成 falsy 吞掉，所以要显式判 NaN 而不是用 ||
+      paceMs: clampPace(g.paceMs),
       strategy:
         g.strategy === "sample" || g.strategy === "threshold" ? g.strategy : "greedy",
       threshold: clamp01(g.threshold),

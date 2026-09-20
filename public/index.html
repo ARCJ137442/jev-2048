@@ -35,6 +35,10 @@ header .spacer{flex:1}
   padding:6px 11px;transition:.14s;white-space:nowrap}
 .hbtn:hover{background:#26221e;color:var(--ink);border-color:var(--line-2)}
 .hbtn svg{width:14px;height:14px;flex-shrink:0}
+/* GitHub 引流入口：最右，纯图标 */
+a.gh{text-decoration:none;padding:6px 9px}
+a.gh svg{width:17px;height:17px}
+a.gh:hover{color:var(--accent);border-color:var(--accent)}
 @media(max-width:860px){ .hbtn .lbl{display:none} }
 @media(max-width:520px){ .sub{display:none} }
 
@@ -397,6 +401,14 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <path d="M3 7h18v13H3z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 12h6"/>
     </svg><span class="lbl">存档</span>
   </button>
+
+  <a class="hbtn gh" id="bGithub" href="https://github.com/ARCJ137442/jev-2048"
+     target="_blank" rel="noopener noreferrer"
+     title="在 GitHub 上查看源码 · 欢迎 star 与 issue">
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+    </svg>
+  </a>
 </header>
 
 <main>
@@ -415,7 +427,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 
     <div class="pace">
       <span class="lbl">步进间隔</span>
-      <input type="range" id="pace" min="100" max="5000" step="100" value="2000" title="自动走棋的间隔，0.1s – 5s">
+      <input type="range" id="pace" min="0" max="5000" step="100" value="2000" title="自动走棋的间隔。0 = 不等，上游多快就多快（测极限用）">
       <span class="val" id="paceVal">2.0s</span>
     </div>
   </section>
