@@ -1,0 +1,30 @@
+# 部署到 Vercel 时不上传的东西。
+#
+# 前端由 tsc 编译到 public/js 后作为静态资源发布，
+# api/evaluate.ts 作为 Serverless Function。其余都不需要。
+
+# 本地密钥目录 —— 绝不能上传
+../local/
+local/
+
+# 构建产物（Vercel 会自己重新编译）
+dist/
+dist-test/
+
+# 开发工具与测试
+src/test/
+tools/
+.github/
+
+# 文档（README 由 GitHub 展示，不必进部署包）
+DESIGN.md
+
+# 依赖
+node_modules/
+
+# 编辑器 / 系统
+.gitignore
+.DS_Store
+.vscode/
+.idea/
+*.log

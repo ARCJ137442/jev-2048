@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    // 客户端与服务器两份配置都不覆盖 api/ 目录，
+    // 不单独检查的话，Vercel Function 里的类型错误只会在部署时才暴露。
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["api/**/*.ts"]
+}

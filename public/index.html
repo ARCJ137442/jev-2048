@@ -225,6 +225,7 @@ textarea{resize:vertical}
 .lgrow code{color:var(--ink-2);font-family:var(--mono);word-break:break-all}
 .lgbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .lglabel{font:9.5px var(--mono);color:var(--ink-4);letter-spacing:.07em;text-transform:uppercase;margin:9px 0 4px}
+.lghint{font:10.5px var(--mono);color:var(--ink-4);text-align:center;padding:10px 0 4px}
 .lgbody pre{background:#080807;border:1px solid var(--line);border-radius:5px;padding:9px;
   font:10.5px/1.55 var(--mono);color:var(--ink-2);overflow:auto;max-height:230px;white-space:pre-wrap;word-break:break-all}
 
@@ -667,6 +668,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   </div>
   <footer>
     <button id="bGameReset" class="ghost" title="棋盘尺寸、新方块区间、动效回到出厂值">恢复默认</button>
+    <button id="bScoreReset" class="ghost" title="清空各棋盘尺寸的历史最高分与最大瓷砖">重置最高分</button>
     <span style="flex:1"></span>
     <button id="bGameDone" class="primary">完成</button>
   </footer>

@@ -1,0 +1,93 @@
+name: Deploy to Vercel
+
+# 推送到 main 时自动部署到 Vercel 生产环境。
+#
+# 也可以用 Vercel 官方的 Git 集成（在 Vercel 控制台连仓库，推送即部署），
+# 那更省事。这个工作流的价值在于：
+#   - 部署前先跑完 CI，测试不过就不部署
+#   - 部署记录留在 GitHub 的 Actions 页，和代码变更放在一起
+#
+# 需要配置的仓库 Secrets：
+#   VERCEL_TOKEN        在 Vercel 账户设置里生成
+#   VERCEL_ORG_ID       项目设置里能看到
+#   VERCEL_PROJECT_ID   同上
+#
+# ⚠ 免费试用后端的密钥 **不在这里配置** —— 它是 Vercel 项目的
+#   环境变量 VERCEL_AI_GATEWAY_KEY，在 Vercel 控制台设置。
+#   放进 GitHub Secrets 再传给 Vercel 只会多一个泄漏面。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 检查部署凭据
+        id: guard
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::warning::未配置 VERCEL_TOKEN，跳过部署。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 拉取 Vercel 配置
+        if: steps.guard.outputs.skip == 'false'
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: 构建
+        if: steps.guard.outputs.skip == 'false'
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: 部署
+        if: steps.guard.outputs.skip == 'false'
+        id: deploy
+        run: |
+          url=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### 已部署 → $url" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: 冒烟测试
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          set -e
+          url="${{ steps.deploy.outputs.url }}"
+          echo "检查 $url/api/evaluate"
+          # 免费试用后端应回 200 且返回脱敏后的密钥形态
+          health=$(curl -fsS "$url/api/evaluate")
+          echo "$health"
+          echo "$health" | grep -q '"backend":"free-trial"' || {
+            echo "::error::健康检查未返回预期后端标识"; exit 1; }
+          # 响应里绝不该出现完整密钥
+          echo "$health" | grep -qE 'vck_[A-Za-z0-9]{20,}' && {
+            echo "::error::健康检查泄漏了密钥！"; exit 1; }
+          echo "✓ 冒烟测试通过"

@@ -108,6 +108,9 @@ const MEMORY_TOKEN_BUDGET = Math.floor(CONTEXT_WINDOW * 0.55);
  *   1. boot() 里用 assertDom() 一次性核对全部 id
  *   2. 构建前由 tools/check-dom.ts 静态比对，从源头拦住
  */
+/** 日志面板一次最多渲染多少条 —— 几百条 <details> 全渲染会明显卡顿 */
+const LOG_PAGE_SIZE = 120;
+
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
 
@@ -871,22 +874,54 @@ function fmtJson(v: unknown): string {
   try { return JSON.stringify(v, null, 2); } catch { return String(v); }
 }
 
+/**
+ * 日志条目的稳定标识。
+ *
+ * 不能只用 turn —— 调用失败后重试会产生同一 turn 的第二条记录。
+ * 用 turn + 时间戳组合，保证每条记录在整个会话内唯一。
+ */
+function logKey(r: TurnLog): string {
+  return `${r.turn}@${r.at}`;
+}
+
+/**
+ * 重绘日志列表。
+ *
+ * 这里做了两件「防止画面抖动」的事，缺一不可：
+ *
+ *   1. **保留展开状态**。新条目到来时如果整表重建，用户正在看的那个
+ *      展开项会「啪」地合上。所以先收集哪些 key 是展开的，
+ *      再把 open 属性直接写进生成的 HTML —— 而不是渲染完再补设，
+ *      后者会先画一帧关闭态再展开，眼睛能看到闪一下。
+ *   2. **保留滚动位置**。`innerHTML = ...` 会把 scrollTop 归零，
+ *      用户往下翻看历史时突然被拽回顶部。
+ */
 function renderLog(): void {
   const host = $("logList");
   const tag = $("logCount");
   const n = state.history.length;
   tag.textContent = n ? `${n} 条` : "";
 
+  // 记下当前的展开项与滚动位置
+  const openKeys = new Set<string>();
+  for (const d of host.querySelectorAll<HTMLDetailsElement>("details[data-key]")) {
+    if (d.open) openKeys.add(d.dataset.key ?? "");
+  }
+  const scrollTop = host.scrollTop;
+
   if (n === 0) {
     host.innerHTML = `<div class="idle">还没有请求记录</div>`;
     return;
   }
 
+  const paged = state.history.slice(-LOG_PAGE_SIZE);
+
   // 最新的在最上面
-  host.innerHTML = state.history
+  host.innerHTML = paged
     .slice()
     .reverse()
     .map((r) => {
+      const key = logKey(r);
       const tm = r.at.slice(11, 19);
       const cls = r.failed ? "lg err" : r.coerced ? "lg warn" : "lg";
       const head = r.failed
@@ -895,7 +930,9 @@ function renderLog(): void {
       const probs = r.failed
         ? ""
         : `<span class="lgprobs">${r.top.toFixed(2)} / ${r.median.toFixed(2)} / ${r.bottom.toFixed(2)}</span>`;
-      return `<details class="${cls}">
+      // open 写进 HTML 本身，避免「先关闭后展开」的一帧闪烁
+      const openAttr = openKeys.has(key) ? " open" : "";
+      return `<details class="${cls}" data-key="${escapeHtml(key)}"${openAttr}>
         <summary>
           <span class="lgturn">#${r.turn}</span>
           ${head}
@@ -905,9 +942,9 @@ function renderLog(): void {
         <div class="lgbody">
           <div class="lgrow"><span>决策依据</span><code>${escapeHtml(r.reason)}</code></div>
           <div class="lgbtns">
-            <button data-copy="req" data-i="${r.turn}">复制请求</button>
-            <button data-copy="res" data-i="${r.turn}">复制响应</button>
-            <button data-copy="both" data-i="${r.turn}">复制完整调用</button>
+            <button data-copy="req" data-k="${escapeHtml(key)}">复制请求</button>
+            <button data-copy="res" data-k="${escapeHtml(key)}">复制响应</button>
+            <button data-copy="both" data-k="${escapeHtml(key)}">复制完整调用</button>
           </div>
           <div class="lglabel">请求 request</div>
           <pre>${escapeHtml(fmtJson(r.request))}</pre>
@@ -918,11 +955,21 @@ function renderLog(): void {
     })
     .join("");
 
+  if (paged.length < n) {
+    host.insertAdjacentHTML(
+      "beforeend",
+      `<div class="lghint">仅显示最近 ${LOG_PAGE_SIZE} 条，更早的可用「复制全部」导出</div>`,
+    );
+  }
+
+  // 还原滚动位置
+  host.scrollTop = scrollTop;
+
   host.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
-      const i = Number(btn.dataset.i);
-      const row = state.history.find((r) => r.turn === i);
+      const want = btn.dataset.k;
+      const row = state.history.find((r) => logKey(r) === want);
       if (!row) return;
       const kind = btn.dataset.copy;
       const parts: string[] = [];
@@ -1438,6 +1485,21 @@ function resetStrategySettings(): void {
   syncGameUi();
 }
 
+/**
+ * 重置历史最高分。
+ *
+ * 与「恢复默认」分开是刻意的：那一个保留纪录（用户的成绩不该被设置操作抹掉），
+ * 这一个专门抹纪录。两件事的意图完全不同，混在一个按钮里必然误伤。
+ */
+function resetScores(): void {
+  store.highScores = {};
+  store.bestTiles = {};
+  save(store);
+  state.best = 0;
+  state.bestTile = 0;
+  updateStats();
+}
+
 function resetApiSettings(): void {
   Object.assign(store.api, DEFAULT_API);
   save(store);
@@ -1591,6 +1653,14 @@ $("bStrategyReset").onclick = () =>
   confirmAction("恢复策略的默认设置？\n（上下文文本、后果预测、记忆、决策策略、阈值都会回到出厂值）", () => {
     resetStrategySettings();
   });
+$("bScoreReset").onclick = () =>
+  confirmAction(
+    "重置所有历史最高分与最大瓷砖？\n（各棋盘尺寸的纪录都会被清空，当前对局不受影响）",
+    () => {
+      resetScores();
+      toast("已重置最高分");
+    },
+  );
 $("bApiReset").onclick = () =>
   confirmAction("恢复 API 的默认设置？\n（自动重试参数回到出厂值；后端与密钥不受影响）", () => {
     resetApiSettings();
@@ -1680,6 +1750,7 @@ function boot(): void {
     "incompatModal", "incompatReason", "incompatSize", "incompatPreview",
     "quotaModal", "quotaDetail", "bQuotaSwitch", "bQuotaClose",
     "bIncompatExport", "bIncompatForce", "bIncompatReset", "bIncompatLater",
+    "bGameReset", "bScoreReset", "bStrategyReset", "bApiReset", "bArchiveWipe", "bLogClear", "bCopyAll",
     "ruleDesc", "hintText", "inpCons",
     "inpWidth", "inpHeight", "inpSpawnMin", "inpSpawnMax", "inpDist",
     "inpInitMin", "inpInitMax", "spawnWarn", "initWarn", "inpAnim", "inpParticles",

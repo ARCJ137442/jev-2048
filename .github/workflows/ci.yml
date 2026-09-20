@@ -1,0 +1,56 @@
+name: CI
+
+# 三道检查与本地 ./start.sh 完全一致 —— 本地能过，CI 就能过，反之亦然。
+# 不一致的 CI 会逼人「本地先跑一遍再推」，那 CI 就失去意义了。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+  # 供 deploy.yml 复用，避免两处各写一遍检查步骤而慢慢走样
+  workflow_call:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 检查 DOM id 一致性
+        # HTML 与 TS 不同步会导致启动期异常，静默中断整个应用
+        run: node tools/check-dom.ts
+
+      - name: 类型检查
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.client.json --noEmit
+          node node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit
+          node node_modules/typescript/bin/tsc -p tsconfig.api.json
+
+      - name: 单元测试
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.test.json
+          node --test dist-test/test/*.test.js
+
+      - name: 构建
+        run: |
+          node node_modules/typescript/bin/tsc -p tsconfig.client.json
+          node node_modules/typescript/bin/tsc -p tsconfig.server.json
+
+      - name: 确认产物里不含密钥
+        # 真密钥不该出现；这里再兜一道，防止将来有人把 key 写进源码
+        run: |
+          if grep -rIl --exclude-dir=node_modules --exclude-dir=.git -E 'vck_[A-Za-z0-9]{20,}|sk-or-v1-[a-f0-9]{30,}' .; then
+            echo "::error::仓库中出现了疑似真实密钥，请立即移除并轮换"
+            exit 1
+          fi
+          echo "✓ 未发现明文密钥"
