@@ -30,6 +30,16 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     verified: true,
     needsKey: false,
   },
+  openrouterproxy: {
+    label: "免费试用 2",
+    base: "/api/evaluate2",
+    model: "typesafe/jev-1.13",
+    note:
+      "与「免费试用」同一套服务端代理架构，走另一个上游。密钥同样只存在于服务端。" +
+      "额度独立，一个用尽时另一个可能还有余量。",
+    verified: true,
+    needsKey: false,
+  },
   vercel: {
     label: "Vercel AI Gateway",
     base: "https://ai-gateway.vercel.sh/v1/evaluate",
@@ -42,16 +52,18 @@ export const BACKENDS: Record<BackendId, BackendConfig> = {
     label: "TypeSafe 官方",
     base: "https://api.typesafe.ai/v1/systemone",
     model: "jev-latest",
-    note: "端点存在（403），请求体结构未经实测验证，可能因 waitlist 不可用。",
+    note: "端点存在但返回 403，请求体结构未经实测验证，可能因 waitlist 不可用。",
     verified: false,
     needsKey: true,
   },
   openrouter: {
-    label: "OpenRouter",
-    base: "https://openrouter.ai/api/alpha/decisions",
+    label: "OpenRouter 直连",
+    base: "https://openrouter.ai/api/v1/systemone",
     model: "typesafe/jev-1.13",
-    note: "端点存在（401，alpha）。请求体结构未经实测验证，可能需要 decisionsRequest 包装。",
-    verified: false,
+    note:
+      "已实测可用。模型 ID 必须是 typesafe/jev-1.13（typesafe/jev-latest 与 typesafe-ai/jev 都会报不存在）。" +
+      "注意：OpenRouter 的布尔类型判别值是 noul，Vercel 那边叫 boolean，两家相反。",
+    verified: true,
     needsKey: true,
   },
   lmstudio: {

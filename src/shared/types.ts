@@ -150,7 +150,20 @@ export interface JevResponse {
    应用层
    ============================================================ */
 
-export type BackendId = "localproxy" | "vercel" | "typesafe" | "openrouter" | "lmstudio";
+/**
+ * 后端标识。
+ *
+ * 注意 localproxy 与 openrouterproxy 是**同构的两套服务端代理** ——
+ * 它们不是「某个提供商」，而是「本站代为调用的免费额度」。
+ * 界面上显示为「免费试用」与「免费试用 2」，不暴露背后的提供商。
+ */
+export type BackendId =
+  | "localproxy"
+  | "openrouterproxy"
+  | "vercel"
+  | "typesafe"
+  | "openrouter"
+  | "lmstudio";
 
 export interface BackendConfig {
   label: string;

@@ -20,12 +20,53 @@ import { unseal } from "./seal.js";
 // dist/server/server.js → dist/server → dist → 项目根
 const HERE = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PUBLIC_DIR = join(HERE, "public");
-const KEY_FILE = join(HERE, "..", "local", "vercel-secret-api-key");
-/** 封存后的密钥文件。存在时优先于明文文件。 */
-const SEALED_KEY_FILE = `${KEY_FILE}.sealed`;
+const LOCAL_DIR = join(HERE, "..", "local");
 
-const GATEWAY = "https://ai-gateway.vercel.sh/v1/evaluate";
-const DEFAULT_MODEL = "typesafe-ai/jev";
+/**
+ * 上游表。「免费试用」与「免费试用2」是同一套代理架构的两个实例，
+ * 区别只在「转发到哪、用哪个密钥」，所以用一张表描述而不是复制两份处理逻辑。
+ *
+ * ⚠ 两家的**协议命名不一致**（实测结论）：
+ *   - Vercel 的布尔类型叫 `boolean`，OpenRouter 叫 `noul`，传错会被 400 拒绝
+ *   - usage 字段 Vercel 是 `inputTokens`，OpenRouter 是 `input_tokens`
+ *   - 模型 ID 命名空间也不同
+ * 本项目的 best_move 走 `choice`，两边一致，所以主流程不受影响；
+ * 但将来若要加布尔类型的问题，必须按上游分别取判别值。
+ */
+interface Upstream {
+  /** 端点路径（本机服务器暴露给浏览器的） */
+  route: string;
+  /** 真实上游地址 */
+  url: string;
+  /** 环境变量名（Vercel 部署时用） */
+  envKey: string;
+  /** 本机密钥文件名（相对 local/） */
+  keyFile: string;
+  /** 默认模型 ID */
+  model: string;
+  /** 面向用户的标识，仅用于日志与健康检查 */
+  label: string;
+}
+
+const UPSTREAMS: Upstream[] = [
+  {
+    route: "/api/evaluate",
+    url: "https://ai-gateway.vercel.sh/v1/evaluate",
+    envKey: "VERCEL_AI_GATEWAY_KEY",
+    keyFile: "vercel-secret-api-key",
+    model: "typesafe-ai/jev",
+    label: "free-trial",
+  },
+  {
+    route: "/api/evaluate2",
+    url: "https://openrouter.ai/api/v1/systemone",
+    envKey: "OPENROUTER_API_KEY",
+    keyFile: "openrouter-secret-api-key",
+    model: "typesafe/jev-1.13",
+    label: "free-trial-2",
+  },
+];
+
 const DEFAULT_PORT = 8787;
 const MAX_BODY = 512 * 1024;
 
@@ -45,44 +86,40 @@ const MIME: Record<string, string> = {
 /* ═══════════ 密钥 ═══════════ */
 
 /**
- * 按优先级取密钥：
- *   1. 环境变量 VERCEL_AI_GATEWAY_KEY   —— 最干净，密钥不落盘
- *   2. 封存文件 *.sealed                —— 磁盘上只有密文
+ * 按优先级取某个上游的密钥：
+ *   1. 环境变量                          —— 最干净，密钥不落盘
+ *   2. 封存文件 *.sealed                 —— 磁盘上只有密文
  *   3. 明文文件                          —— 兼容旧布置，启动时提醒
+ *
+ * 找不到时返回 null 而不是退出：某个上游没配密钥，不该让整个服务起不来 ——
+ * 另一个「免费试用」还能用。启动时会把不可用的标记出来。
  */
-function loadApiKey(): { key: string; source: string } {
-  const env = (process.env.VERCEL_AI_GATEWAY_KEY ?? "").trim();
-  if (env) return { key: env, source: "环境变量 VERCEL_AI_GATEWAY_KEY" };
+function loadKey(up: Upstream): { key: string; source: string } | null {
+  const env = (process.env[up.envKey] ?? "").trim();
+  if (env) return { key: env, source: `环境变量 ${up.envKey}` };
 
-  if (existsSync(SEALED_KEY_FILE)) {
-    const sealed = readFileSync(SEALED_KEY_FILE, "utf8").trim();
-    const key = unseal(sealed);
-    if (key && key.trim()) {
-      return { key: key.trim(), source: `${SEALED_KEY_FILE}（已封存）` };
-    }
-    console.error(`[致命] 封存密钥解不开：${SEALED_KEY_FILE}`);
-    console.error(`       口令不对，或文件被改动过。`);
-    console.error(`       若换过口令，请设 JEV_SEAL_PASSPHRASE 后重试。`);
-    process.exit(1);
+  const plain = join(LOCAL_DIR, up.keyFile);
+  const sealedPath = `${plain}.sealed`;
+
+  if (existsSync(sealedPath)) {
+    const key = unseal(readFileSync(sealedPath, "utf8").trim());
+    if (key && key.trim()) return { key: key.trim(), source: `${up.keyFile}.sealed（已封存）` };
+    console.error(`[警告] ${up.label} 的封存密钥解不开，该上游将不可用。`);
+    console.error(`       口令不对或文件被改动过；换过口令就设 JEV_SEAL_PASSPHRASE。`);
+    return null;
   }
 
-  if (!existsSync(KEY_FILE)) {
-    console.error(`[致命] 找不到密钥。按优先级依次尝试过：`);
-    console.error(`       1. 环境变量 VERCEL_AI_GATEWAY_KEY`);
-    console.error(`       2. ${SEALED_KEY_FILE}`);
-    console.error(`       3. ${KEY_FILE}`);
-    process.exit(1);
+  if (existsSync(plain)) {
+    const key = readFileSync(plain, "utf8").trim();
+    if (key) return { key, source: `${up.keyFile}（明文，建议封存）` };
   }
 
-  const key = readFileSync(KEY_FILE, "utf8").trim();
-  if (!key) {
-    console.error(`[致命] 密钥文件为空：${KEY_FILE}`);
-    process.exit(1);
-  }
-  return { key, source: `${KEY_FILE}（明文，建议封存）` };
+  return null;
 }
 
-const { key: API_KEY, source: KEY_SOURCE } = loadApiKey();
+/** 各上游的密钥与可用状态，启动时一次性解析 */
+const KEYS = new Map<string, { key: string; source: string } | null>();
+for (const up of UPSTREAMS) KEYS.set(up.route, loadKey(up));
 
 function masked(key: string): string {
   return key.length > 14 ? `${key.slice(0, 7)}${"*".repeat(12)}${key.slice(-4)}` : "***";
@@ -156,7 +193,21 @@ function resolveStatic(urlPath: string): string | null {
   return full;
 }
 
-async function handleEvaluate(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleEvaluate(
+  up: Upstream,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const cred = KEYS.get(up.route);
+  if (!cred) {
+    sendJson(res, 503, {
+      error: {
+        message: `${up.label} 未配置密钥：服务端缺少 ${up.envKey} 环境变量或本地密钥文件。请改用其他后端。`,
+      },
+    });
+    return;
+  }
+
   let payload: Record<string, unknown>;
   try {
     const raw = await readBody(req);
@@ -170,19 +221,21 @@ async function handleEvaluate(req: IncomingMessage, res: ServerResponse): Promis
     return;
   }
 
-  // 关键：模型与密钥一律由服务器决定，忽略浏览器传来的任何认证信息
-  payload.model = (payload.model as string) || DEFAULT_MODEL;
+  // 关键：模型与密钥一律由服务器决定，忽略浏览器传来的任何认证信息。
+  // 模型 ID 的命名空间两家不同（typesafe-ai/jev vs typesafe/jev-1.13），
+  // 所以取上游表里的值而不是客户端的。
+  payload.model = up.model;
 
   const t0 = Date.now();
   let status = 502;
   let body = "";
 
   try {
-    const upstream = await fetch(GATEWAY, {
+    const upstream = await fetch(up.url, {
       method: "POST",
       headers: {
         // ← 密钥在这里注入，永不外泄给浏览器
-        Authorization: `Bearer ${API_KEY}`,
+        Authorization: `Bearer ${cred.key}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -190,8 +243,14 @@ async function handleEvaluate(req: IncomingMessage, res: ServerResponse): Promis
     status = upstream.status;
     body = await upstream.text();
   } catch (e) {
-    sendJson(res, 502, { error: { message: `无法连接 AI Gateway：${(e as Error).message}` } });
-    log(`✗ 502  连接失败：${(e as Error).message}`);
+    // Node 的 fetch 失败时 message 只有笼统的 "fetch failed"，
+    // 真正的原因藏在 cause 里（DNS / TLS / 超时 / 连接被拒各不相同）。
+    // 不打出来就没法排查。
+    const err = e as Error & { cause?: { code?: string; message?: string } };
+    const detail = err.cause?.code ?? err.cause?.message ?? "";
+    const msg = detail ? `${err.message}（${detail}）` : err.message;
+    sendJson(res, 502, { error: { message: `无法连接上游：${msg}` } });
+    log(`✗ [${up.label}] 502  连接失败：${msg}`);
     return;
   }
 
@@ -200,19 +259,21 @@ async function handleEvaluate(req: IncomingMessage, res: ServerResponse): Promis
   if (status === 200) {
     try {
       const d = JSON.parse(body) as {
-        usage?: { inputTokens?: number };
+        usage?: { inputTokens?: number; input_tokens?: number };
         answers?: { best_move?: { choice?: string; confidence?: number } };
       };
-      const tok = d.usage?.inputTokens ?? 0;
+      // usage 字段命名两家不同：Vercel 用 inputTokens，OpenRouter 用 input_tokens
+      const u = d.usage ?? {};
+      const tok = u.inputTokens ?? u.input_tokens ?? 0;
       const mv = d.answers?.best_move?.choice ?? "?";
       const conf = d.answers?.best_move?.confidence;
       const confStr = typeof conf === "number" ? conf.toFixed(2) : "—";
-      log(`✓ 200  → ${mv}  置信 ${confStr}  ${tok} tok  ${ms}ms`);
+      log(`✓ [${up.label}] 200  → ${mv}  置信 ${confStr}  ${tok} tok  ${ms}ms`);
     } catch {
-      log(`✓ 200  (响应解析失败)  ${ms}ms`);
+      log(`✓ [${up.label}] 200  (响应解析失败)  ${ms}ms`);
     }
   } else {
-    log(`✗ ${status}  ${ms}ms`);
+    log(`✗ [${up.label}] ${status}  ${ms}ms`);
   }
 
   send(res, status, body, "application/json; charset=utf-8");
@@ -229,17 +290,32 @@ const server = createServer((req, res) => {
   const path = (req.url ?? "/").split("?")[0];
 
   if (req.method === "GET" && path === "/api/health") {
+    // 只回显脱敏形态与「哪个上游可用」，绝不返回密钥本身
     sendJson(res, 200, {
       ok: true,
-      key: masked(API_KEY),
-      gateway: GATEWAY,
-      model: DEFAULT_MODEL,
+      backends: UPSTREAMS.map((up) => {
+        const cred = KEYS.get(up.route);
+        return {
+          route: up.route,
+          label: up.label,
+          available: Boolean(cred),
+          key: cred ? masked(cred.key) : null,
+        };
+      }),
     });
     return;
   }
 
-  if (req.method === "POST" && path === "/api/evaluate") {
-    void handleEvaluate(req, res);
+  const up = UPSTREAMS.find((u) => u.route === path);
+  if (req.method === "POST" && up) {
+    void handleEvaluate(up, req, res);
+    return;
+  }
+
+  // 兼容旧路径：早期版本只有 /api/evaluate，健康检查的字段名也变了。
+  // 保留一个 GET 的兜底说明，避免旧前端拿到 404 后一脸茫然。
+  if (req.method === "GET" && UPSTREAMS.some((u) => u.route === path)) {
+    sendJson(res, 405, { error: { message: `${path} 只接受 POST` } });
     return;
   }
 
@@ -279,7 +355,19 @@ server.on("error", (e: NodeJS.ErrnoException) => {
 
 server.listen(port, "0.0.0.0", () => {
   const ip = lanIp();
-  const keySource = KEY_SOURCE;
+
+  const backendLines = UPSTREAMS.flatMap((up) => {
+    const cred = KEYS.get(up.route);
+    if (!cred) {
+      return [`  ✗ ${up.label.padEnd(12)} 未配置（缺 ${up.envKey} 或本地密钥文件）`];
+    }
+    return [
+      `  ✓ ${up.label.padEnd(12)} ${up.route}`,
+      `     密钥 ${masked(cred.key)}   来源 ${cred.source}`,
+      `     上游 ${up.url}`,
+      `     模型 ${up.model}`,
+    ];
+  });
 
   console.log(
     [
@@ -287,15 +375,12 @@ server.listen(port, "0.0.0.0", () => {
       "═".repeat(62),
       "  JEV × 2048  —  决策仪器已启动",
       "═".repeat(62),
-      `  密钥       ${masked(API_KEY)}   (仅存于本进程内存)`,
-      `  密钥来源   ${keySource}`,
-      `  上游       ${GATEWAY}`,
-      `  模型       ${DEFAULT_MODEL}`,
+      ...backendLines,
       "",
       `  本机访问   http://localhost:${port}/`,
       `  局域网访问 http://${ip}:${port}/`,
       "",
-      "  在浏览器中打开上面任一地址即可开始。",
+      "  在浏览器上打开上面任一地址即可开始。",
       "  Ctrl+C 停止服务。",
       "═".repeat(62),
       "",

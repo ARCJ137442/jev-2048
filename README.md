@@ -178,7 +178,7 @@ node --test dist-test/test/*.test.js                          # 66 项
 |---|---|---|
 | 端点 | `POST https://ai-gateway.vercel.sh/v1/evaluate` | **不是** `/v1/chat/completions`，也**不是** AI SDK 的 `experimental_evaluate`（那是服务端 Node SDK） |
 | 域名 | `ai-gateway.vercel.**sh**` | 不是 `.ai` |
-| 问题类型判别值 | `boolean` / `choice` / `score` | 文档里的 "noul" 在 API 层叫 `boolean` |
+| 问题类型判别值 | **两家相反** | Vercel 用 `boolean`，OpenRouter 用 `noul`。详见下表 |
 | `questions` 结构 | **record（对象），不是数组** | 传数组报 `expected record, received array` |
 | `criteria` | **必填** | 缺失直接 400。choice 传 map，score 传有序数组，boolean 传 `{true, false}` |
 | 浏览器直连 | **可行** | Gateway 的 CORS 全开（回显 Origin + `allow-credentials: true`） |
@@ -189,6 +189,26 @@ node --test dist-test/test/*.test.js                          # 66 项
 {"error":{"message":"Model 'typesafe-ai/jev' is an evaluation model,
  not a language model. Use the evaluation generation API instead."}}
 ```
+
+### ⚠ 两个网关的命名差异
+
+同一个 Jev、同一份 SystemOne 协议，两家网关做了**不同的命名选择**：
+
+| | Vercel AI Gateway | OpenRouter |
+|---|---|---|
+| 端点 | `/v1/evaluate` | `/api/v1/systemone` |
+| 模型 ID | `typesafe-ai/jev` | `typesafe/jev-1.13` |
+| 布尔类型判别值 | `boolean` | **`noul`** |
+| 布尔答案字段 | `{"type":"boolean","probability":0.69}` | `{"type":"noul","noul":0.96}` |
+| usage 字段 | `inputTokens` | `input_tokens` |
+
+**不要想当然地套用另一家的写法。** 传错判别值会被 400 拒绝，
+错误原文：`Invalid discriminator value. Expected 'noul' | 'choice' | 'score'`。
+
+`choice` 与 `score` 两家的结构一致，所以本项目的主流程（`best_move` 走 choice）不受影响。
+
+> OpenRouter 上 `typesafe/jev-latest` 与 `typesafe-ai/jev` 都会报「模型不存在」，
+> 必须用版本化的 `typesafe/jev-1.13`。
 
 ### 响应结构
 
@@ -405,7 +425,8 @@ API 档也不碰密钥。类型不匹配直接拒绝（`all` 档除外）。
 
 | 后端 | 状态 |
 |---|---|
-| **免费试用** | ✅ 本机与 Vercel 部署均可用。服务端持钥，浏览器零凭据。额度有限，用尽时弹出专用提示。**界面上不暴露它背后的实现细节** |
+| **免费试用 / 免费试用 2** | ✅ 本机与 Vercel 部署均可用。服务端持钥，浏览器零凭据。**两套额度互相独立**，一个用尽时另一个可能还有余量。界面上不暴露背后的提供商 |
+| OpenRouter 直连 | ✅ 已实测可用（`typesafe/jev-1.13`） |
 | **免费试用** | ✅ 实测端到端可用。服务端代为调用，密钥不进入浏览器。额度有限 |
 | Vercel AI Gateway 直连 | ✅ 实测可用，但密钥会进入浏览器内存 |
 | TypeSafe 官方 | ⚠️ 端点存在（403），请求体结构**未验证** |
