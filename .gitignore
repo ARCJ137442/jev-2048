@@ -10,6 +10,8 @@ public/js/
 ../local/vercel-secret-api-key
 local/
 *.key
+*.sealed
+openrouter-secret-api-key*
 
 # 编辑器 / 系统
 .DS_Store

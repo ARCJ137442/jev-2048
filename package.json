@@ -5,6 +5,15 @@
   "type": "module",
   "description": "用 TypeSafe AI 的 Jev 决策模型作为 2048 引擎的实验台。Jev 不生成文本，它接收 state 和带类型的 questions，返回带校准概率的结构化决策。",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ARCJ137442/jev-2048.git"
+  },
+  "homepage": "https://jev-2048.vercel.app",
+  "bugs": {
+    "url": "https://github.com/ARCJ137442/jev-2048/issues"
+  },
+  "keywords": ["jev", "typesafe", "systemone", "decision-model", "2048", "typescript"],
   "scripts": {
     "build": "node node_modules/typescript/bin/tsc -p tsconfig.client.json && node node_modules/typescript/bin/tsc -p tsconfig.server.json",
     "build:client": "node node_modules/typescript/bin/tsc -p tsconfig.client.json",

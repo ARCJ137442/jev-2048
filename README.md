@@ -1,465 +1,277 @@
-# JEV × 2048 — 决策仪器
+# Jev × 2048
 
-用 [TypeSafe AI 的 Jev](https://vercel.com/kb/guide/typesafe-jev-and-ai-sdk) 作为 2048 的决策引擎。
-Jev 不生成文本，它接收一个 `state` 和一组带类型的 `questions`，返回**带校准概率的结构化决策**。
+|**简体中文** | [English](README.en.md)|
+|:-:|:-:|
 
-> **核心定位：测量 Jev，不是做一个好玩的 2048。**
-> 几乎所有设计决策都由这一条推导而来。详见 [DESIGN.md](./DESIGN.md)。
+<!-- 📝徽章安排参考：https://daily.dev/blog/readme-badges-github-best-practices#organizing-badges-in-your-readme -->
+
+![License](https://img.shields.io/badge/license-MIT-78dce8?style=for-the-badge)
+![Code Size](https://img.shields.io/github/languages/code-size/ARCJ137442/jev-2048?style=for-the-badge&color=78dce8)
+![Language](https://img.shields.io/badge/language-TypeScript-78dce8?style=for-the-badge)
+![Node](https://img.shields.io/badge/node-%E2%89%A520-78dce8?style=for-the-badge)
+
+<!-- 面向用户 -->
+
+试玩：
+
+[![Online Demo](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-Vercel-78dce8?style=for-the-badge)](https://jev-2048.vercel.app)
+
+<!-- 面向开发者 -->
+
+开发状态：
+
+[![CI](https://img.shields.io/github/actions/workflow/status/ARCJ137442/jev-2048/ci.yml?style=for-the-badge&label=CI)](https://github.com/ARCJ137442/jev-2048/actions)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-78dce8?style=for-the-badge)](https://conventionalcommits.org)
+![Last Commit](https://img.shields.io/github/last-commit/ARCJ137442/jev-2048?style=for-the-badge&color=78dce8)
+
+---
+
+## 简介
+
+一个用 [TypeSafe AI 的「Jev」](https://www.typesafe.ai/) 决策模型作为「2048」决策引擎的网页实验台，全 [TypeScript](https://www.typescriptlang.org/) 编写。
+
+Jev 不生成文本。它接收一段「状态」与一组带类型的「问题」，返回**带校准概率的结构化决策**。
+本项目把每一步棋都交给它来决策，并把它的「概率分布」「置信度」「延迟」「token 消耗」全部摊开在界面上 ——
+目的不是做一个好玩的 2048，而是让「上下文设计如何影响决策模型」这件事变得**可见、可调、可测量**。
+
+---
+
+## 在线演示
+
+<https://jev-2048.vercel.app>
+
+页面内置「免费试用」后端，无需配置任何密钥即可试玩。
+额度有限，用尽时会提示切换到自己的 API 密钥 —— 也可用下面「快速开始」在本地跑。
 
 ---
 
 ## 快速开始
 
+### 前置条件
+
+1. 安装 [**Node.js**](https://nodejs.org/)（≥ 20）
+2. 准备一个 Jev 的 API 密钥（可选，仅在使用自备后端时需要）
+
+### 尝鲜：即刻运行
+
 ```bash
-./start.sh            # 检查 → 测试 → 编译 → 启动，默认 8787
-./start.sh 8899       # 指定端口
+git clone https://github.com/ARCJ137442/jev-2048.git
+cd jev-2048
+npm install
+./start.sh
 ```
 
 `start.sh` 会依次执行四步，任一步失败即中止：
 
-```
-▸ 检查 DOM id 一致性…      tools/check-dom.ts
-▸ 运行单元测试…            66 项
+```plaintext
+▸ 检查 DOM id 一致性…     tools/check-dom.ts
+▸ 运行单元测试…           73 项
 ▸ 编译客户端 / 服务器…
 ▸ 启动服务器…
 ```
 
 启动后终端会打印访问地址：
 
-```
+```plaintext
 本机访问   http://localhost:8787/
 局域网访问 http://192.168.41.151:8787/
 ```
 
-**密钥来源**（按优先级）：
-1. 环境变量 `VERCEL_AI_GATEWAY_KEY` —— 密钥完全不落盘
-2. `../local/vercel-secret-api-key.sealed` —— 磁盘上只有密文
-3. `../local/vercel-secret-api-key` —— 明文，兼容旧布置（启动时会提醒）
+### 提供密钥
+
+密钥按以下优先级读取（三条路径任意一条即可）：
+
+1. 环境变量 `VERCEL_AI_GATEWAY_KEY`
+2. `../local/vercel-secret-api-key.sealed`（封存后的密文）
+3. `../local/vercel-secret-api-key`（明文，兼容旧布置）
 
 把明文密钥封存起来：
 
 ```bash
 node tools/seal-key.ts ../local/vercel-secret-api-key
 # → 生成 *.sealed，服务器会自动优先读它
-# 确认服务正常后，可以删掉明文：rm ../local/vercel-secret-api-key
+# 确认服务正常后，可以删掉明文：
+rm ../local/vercel-secret-api-key
 ```
 
-> **这不是密码学保护。** 默认口令就写在 `src/server/seal.ts` 里，拿到仓库就能解开。
-> 它挡的是「明文躺在磁盘上被 `cat` 到、被截图、被误提交」这类**意外暴露**，
-> 不是针对性攻击。真正的密钥保护是「不下发到客户端」与「服务端环境变量」。
+> ⚠️ **这不是密码学保护。** 默认口令就写在 `src/server/seal.ts` 里，拿到仓库就能解开。
+> 它挡的是「明文躺在磁盘上被 `cat` 到、被截图、被误提交」这类**意外暴露**，不是针对性攻击。
+> 真正的密钥保护是「不下发到客户端」与「服务端环境变量」。
 > 想更严一点：设 `JEV_SEAL_PASSPHRASE`，源码里就只剩一个无用的默认值。
 
-> **为什么脚本不调 npm？** Termux 下 `npm`/`npx` 的 shebang 指向不存在的 `/usr/bin/env`，
-> 直接执行会失败。`start.sh` 用 `node` 直接跑 tsc 的 JS 入口绕开它。
-
----
-
-## 技术栈
-
-全 TypeScript，前后端统一，不使用打包器。
-
-```
-src/
-├── shared/types.ts        共享类型 + 可变棋盘尺寸 + 2 的幂次判定
-├── client/
-│   ├── engine.ts          2048 引擎（**纯函数**，tile 列表模型）
-│   ├── metrics.ts         棋盘特征（空格 / 单调性 / 角落）+ 轨迹格计算
-│   ├── decision.ts     ★  决策策略 —— 最值得你亲手改的地方
-│   ├── api.ts             Jev API 适配层（五个后端）+ 指数退避重试
-│   ├── render.ts          Canvas 棋盘渲染（橙色阶 + 方向粒子）
-│   ├── chart.ts           置信度追踪图（面积带 + 中位折线）
-│   ├── config.ts          长期设置持久化（不含密钥）
-│   ├── session.ts         当前对局持久化（支持刷新续玩）
-│   ├── archive.ts         存档导入导出
-│   └── main.ts            装配层
-├── server/server.ts       本机服务器 + 密钥代理
-└── test/
-    ├── engine.test.ts     49 项：引擎规则 + 纯度 + 轴对齐 + 矩形棋盘 + 初始瓷砖 + 生成分布
-    └── archive.test.ts    17 项：存档校验与提取
-
-tools/check-dom.ts         构建期 DOM id 一致性检查
-public/index.html          单页界面（含内联 CSS）
-```
-
-构建产物：客户端 → `public/js/`，服务器 → `dist/`，测试 → `dist-test/`。
-
-客户端用浏览器**原生 ES Modules**（`<script type="module">`），
-tsc 直接输出带 `.js` 扩展名的 import 路径，浏览器能原生加载，无需打包。
-
-### 运行测试
+### 进阶：源码编译
 
 ```bash
-node tools/check-dom.ts                                       # DOM 一致性
+# 类型检查
+node node_modules/typescript/bin/tsc -p tsconfig.client.json --noEmit
+node node_modules/typescript/bin/tsc -p tsconfig.server.json --noEmit
+node node_modules/typescript/bin/tsc -p tsconfig.api.json
+
+# 单元测试
 node node_modules/typescript/bin/tsc -p tsconfig.test.json
-node --test dist-test/test/*.test.js                          # 66 项
+node --test dist-test/test/*.test.js
+
+# 构建
+node node_modules/typescript/bin/tsc -p tsconfig.client.json   # → public/js/
+node node_modules/typescript/bin/tsc -p tsconfig.server.json   # → dist/
 ```
+
+> 📝 本项目**不使用打包器**。客户端用浏览器原生 ES Modules，
+> tsc 直接输出带 `.js` 扩展名的 import 路径，浏览器能原生加载。
+> Termux 下 `npm`/`npx` 的 shebang 指向不存在的 `/usr/bin/env`，
+> 所以 `start.sh` 用 `node` 直接跑 tsc 的 JS 入口绕开它。
 
 ---
 
-## ⚠ 两条硬约束
+## 项目概览
 
-### 1. 引擎纯度
+### 声明
 
-`moveTiles()` 必须**不修改传入的任何 tile 对象**。这不是风格偏好。
+本项目是「Jev」的一个**第三方实验台**，与 TypeSafe AI 无隶属关系。
+「2048」的游戏规则属公有领域，本项目仅借用它作为一个有明确目标的决策场景。
 
-`validMoves()` 的实现是「对每个方向试着走一步，看是否发生移动」。
-如果 `moveTiles` 原地修改 tile，那么**每次询问合法方向都会真的把棋盘搅乱一次**：
+### 系统模块架构
 
-```
-初始           [[2,0,0,0],[0,0,0,0],[4,0,0,0],[0,0,0,0]]
-试算 up 之后    [[2,0,0,0],[4,0,0,0],[0,0,0,0],[0,0,0,0]]
-试算 down 之后  [[0,0,0,0],[0,0,0,0],[2,0,0,0],[4,0,0,0]]
-试算 left 之后  [[0,0,0,0],[0,0,0,0],[2,0,0,0],[4,0,0,0]]
-试算 right 之后 [[0,0,0,0],[0,0,0,0],[0,0,0,2],[0,0,0,4]]   ← 已被挪到第 3 列
-此时执行 down   [[0,0,0,0],[0,0,0,0],[0,0,0,2],[0,0,0,4]]   ← 错！应在第 0 列
-```
-
-行为表现是「上下移动时方块跑到了别的列」「动画走对角线」。
-**动画只是忠实地把被搅乱的棋盘画了出来** —— 根因在引擎，不在渲染。
-
-回归用例：`validMoves 不修改传入的 tile 对象`、
-`试算若干方向后再执行移动，结果与直接执行一致`、
-以及两条轴对齐用例（上下移动不得改变列号、左右移动不得改变行号）。
-
-### 2. HTML 与 TS 必须同步
-
-`$("id")` 拿不到元素时返回 `null`，后续访问抛 TypeError。
-**若这发生在模块求值阶段，会静默中断整个启动流程** ——
-表现为「棋盘空白、点一下直接判负」，与真正的原因（一个多出来的字符串）毫无关联。
-
-三层防线：
-
-| 层 | 手段 |
-|---|---|
-| 构建期 | `tools/check-dom.ts` 静态比对，缺失即中止启动 |
-| 启动期 | `boot()` 里的 `assertDom([...])` 一次性报出**全部**缺失 id |
-| 兜底 | `boot()` 整体包 try/catch，把错误显示在页面上 |
-
----
-
-## 架构：为什么需要一个服务器
-
-本 Demo **不是**纯前端。原因是安全需求倒逼的：
-
-> 要求「API Key 不可查看、不可复制」
-
-如果密钥写进页面，无论怎么遮蔽，打开 DevTools 的 Network 面板都能拿到。
-**只要密钥进了浏览器，就不可能真正隐藏。**
-
-```
-┌─────────────┐   POST /api/evaluate    ┌──────────────┐   + Bearer Key   ┌─────────────────┐
-│  浏览器      │ ──────────────────────► │  server.ts   │ ───────────────► │ ai-gateway      │
-│             │     无任何认证信息        │  持有密钥     │                  │ .vercel.sh      │
-│             │ ◄────────────────────── │              │ ◄─────────────── │ /v1/evaluate    │
-└─────────────┘      决策结果            └──────────────┘    结构化决策      └─────────────────┘
+```plaintext
+jev-2048
+├── src
+│   ├── shared
+│   │   └── types.ts:       前后端共享类型 + 棋盘尺寸 + 生成分布
+│   ├── client
+│   │   ├── engine.ts:      2048 引擎，**纯函数**，tile 列表模型
+│   │   ├── metrics.ts:     棋盘「特征」计算 + 「轨迹格」计算
+│   │   ├── decision.ts:    决策策略 —— 把概率分布转成实际动作 ★
+│   │   ├── api.ts:         多后端适配层 + 指数退避重试
+│   │   ├── render.ts:      Canvas 棋盘渲染（橙色阶 + 方向粒子）
+│   │   ├── chart.ts:       「置信度追踪图」（面积带 + 中位折线）
+│   │   ├── config.ts:      长期设置持久化（不含密钥）
+│   │   ├── session.ts:     对局持久化（支持刷新续玩）
+│   │   ├── archive.ts:     存档导入导出
+│   │   └── main.ts:        装配层
+│   ├── server
+│   │   ├── server.ts:      本机服务器 + 密钥代理
+│   │   └── seal.ts:        密钥封存（AES-256-GCM）
+│   └── test
+│       ├── engine.test.ts:  49 项 —— 引擎规则 / 纯度 / 轴对齐 / 矩形棋盘
+│       ├── archive.test.ts: 17 项 —— 存档校验与提取
+│       └── seal.test.ts:     7 项 —— 密钥封存往返与安全失败
+├── api:                    Vercel Serverless Functions（免费试用后端）
+├── tools
+│   ├── check-dom.ts:       构建期 DOM id 一致性检查
+│   └── seal-key.ts:        明文密钥 → 密文
+├── public:                 单页界面 + 编译产物
+├── DESIGN.md:              设计决策记录（交接用，记录「为什么」）
+└── ...
 ```
 
-密钥全程只存在于 Node 进程内存中。**浏览器从未接触过它。**
+### 所用技术特性
 
-### 实测验证的安全边界
+- 📌 **纯 TypeScript，前后端统一**，不使用打包器
+- 📌 **Canvas 渲染棋盘**：几何构造性正确（`2·pad + n·cell + (n-1)·gap` 恒等于边长），
+  换任何棋盘尺寸四边都严格等距，不需要调参
+- 📌 **「引擎纯度」作为硬约束**：`moveTiles()` 绝不修改入参 ——
+  因为「合法方向」的判断方式就是「逐方向试走一步」，一旦有副作用，
+  每次询问都会真的把棋盘搅乱一次
+- 📌 **不引入任何启发式算法**：模型不确定时不悄悄换算法，而是把「不确定性」暴露给用户
+- 📌 **零凭据下发**：API 密钥只存在于服务端进程，浏览器全程接触不到
 
-| 检查项 | 结果 |
-|---|---|
-| 首页 HTML / `main.js` 中是否含明文密钥 | 0 次出现 |
-| `GET /api/health` 返回 | `vck_3Qq************wXaw`（脱敏） |
-| `GET /src/server/server.ts` | 404 |
-| `GET /tsconfig.json` | 404 |
-| 路径穿越 `/../local/...` | 404 |
+### 可调参数
 
-静态文件服务使用**扩展名白名单**（`ALLOWED_EXT`）并对解析后的路径做前缀校验。
+界面分五个抽屉，顺序即一条用户动线：
+**游戏 → 策略 → API → 日志 → 存档**。
 
----
+分区依据是「**影响谁的输入**」，不是功能分类：
 
-## Jev API 接入要点
+| 分区 | 影响 Jev 的输入 | 影响动作落实 | 内容 |
+|---|:-:|:-:|---|
+| 「游戏」 | ✗ | ✗ | 棋盘宽高、新方块取值区间、生成分布、初始瓷砖个数、动效 |
+| 「策略 › 上下文」 | **✓** | ✗ | 规则说明、策略提示、后果预测、记忆轮数 |
+| 「策略 › 规则」 | ✗ | **✓** | 决策策略、置信度门槛 |
+| 「API」 | ✗ | ✗ | 后端、密钥、自动重试 |
+| 「日志」 | — | — | 每次请求的完整往返，只读 |
+| 「存档」 | — | — | 导入 / 导出 |
 
-**这些是实测踩坑记录，与部分公开文档不一致：**
+> 这条判据可以直接当回归测试用：**改一个「游戏」项，若概率分布变了，说明有 bug。**
 
-| 项目 | 正确值 | 说明 |
+其中「策略 › 上下文」的三组参数是本实验台的核心：
+
+| 参数 | 注入位置 | 观察什么 |
 |---|---|---|
-| 端点 | `POST https://ai-gateway.vercel.sh/v1/evaluate` | **不是** `/v1/chat/completions`，也**不是** AI SDK 的 `experimental_evaluate`（那是服务端 Node SDK） |
-| 域名 | `ai-gateway.vercel.**sh**` | 不是 `.ai` |
-| 问题类型判别值 | **两家相反** | Vercel 用 `boolean`，OpenRouter 用 `noul`。详见下表 |
-| `questions` 结构 | **record（对象），不是数组** | 传数组报 `expected record, received array` |
-| `criteria` | **必填** | 缺失直接 400。choice 传 map，score 传有序数组，boolean 传 `{true, false}` |
-| 浏览器直连 | **可行** | Gateway 的 CORS 全开（回显 Origin + `allow-credentials: true`） |
+| 「规则说明」 | `state.rule_description` | 规则描述越精确，早期回合决策是否越合理 |
+| 「策略提示」 | `state.strategy_hint` | 给出策略后，概率分布是否更集中（`confidence` 上升） |
+| 「后果预测」 | `questions.best_move.criteria` | **影响最大的开关**。开启时每个方向附带模拟结果（合并得分 / 剩余空格 / 最大块是否在角落），关闭时只有方向标签 |
 
-直接调 `/v1/chat/completions` 会被拒绝：
+### 关于「不使用启发式」
 
-```json
-{"error":{"message":"Model 'typesafe-ai/jev' is an evaluation model,
- not a language model. Use the evaluation generation API instead."}}
-```
+一旦模型不确定时悄悄换成规则算法，测量就被污染了 ——
+你无法区分「这一手是 Jev 走的」还是「规则走的」。
 
-### ⚠ 各家网关的命名差异（最容易踩的坑）
+所以本项目的做法是：把不确定性**标记**出来，交由用户判断。
+置信度门槛默认 **0**，即全程逐手使用模型输出。
 
-同一个 Jev、同一份 SystemOne 协议，各家做了**不同的命名选择**：
+### 各网关的命名差异 ⚠️
+
+同一个 Jev、同一份「SystemOne」协议，各家做了**不同的命名选择**：
 
 | | TypeSafe 官方 | OpenRouter | AI/ML API | Vercel Gateway |
 |---|---|---|---|---|
 | 端点 | `/v1/systemone` | `/api/v1/systemone` | `/v1/decisions` | `/v1/evaluate` |
 | 模型 ID | `jev-latest` | `typesafe/jev-1.13` | `typesafe/jev` | `typesafe-ai/jev` |
 | **布尔判别值** | `noul` | `noul` | `noul` | **`boolean`** |
-| 布尔答案键 | `noul` | `noul` | `noul` | `probability` |
 | usage 字段 | `input_tokens` | `input_tokens` | `input_tokens` | `inputTokens` |
 
 **Vercel 是唯一的异类** —— 它自己封装时把 `noul` 改名成了 `boolean`。
+这条一度被搞反：「文档说 noul、API 实际叫 boolean」只对 Vercel 成立。
+官方公开的 `openapi.json`（v0.2.0）确认官方用 `noul`。
 
-> 这条曾经被搞反：早期文档写「公开文档说 noul、API 实际叫 boolean」，
-> 那是**把 Vercel 的特例当成了通例**。官方公开的 `openapi.json`（v0.2.0）
-> 确认官方用 `noul`，OpenRouter 与 AI/ML API 与之一致。
+`choice` 与 `score` 四家完全一致，所以本项目主流程不受影响。
 
-`choice` 与 `score` 四家完全一致，所以本项目主流程（`best_move` 走 choice）不受影响。
+### 想用本地模型跑？
 
-**TypeSafe 官方只有两个端点**：`POST /v1/systemone`（唯一决策端点）与 `GET /v1/models`。
-`/v1/evaluate`、`/v1/decisions` 在官方都是 404。
+**普通的 OpenAI 兼容端点接不了 Jev。**
 
-> OpenRouter 上 `typesafe/jev-latest`（无波浪号）与 `typesafe-ai/jev` 都会报「模型不存在」，
-> 用版本化的 `typesafe/jev-1.13`；裸 ID `jev-1.13` 会被自动映射进 `typesafe/` 命名空间。
+Jev 是决策模型：接收 `state` + `questions`，返回带概率的结构化答案，
+**没有 `/v1/chat/completions`**。LM Studio / vLLM / Ollama 的 OpenAI 兼容层
+本质是「文本补全」，与 SystemOne 协议不匹配 —— 职责不同，不该硬凑。
 
-### 响应结构
+正确做法是**让本地侧实现 SystemOne 协议**，把 OpenAI 兼容留在文本模型那一层：
 
-```json
-{
-  "answers": {
-    "best_move": {
-      "type": "choice",
-      "choice": "left",
-      "probabilities": { "down": 0.11, "up": 0.34, "left": 0.55 },
-      "confidence": 0.32
-    }
-  },
-  "usage": { "inputTokens": 614, "outputTokens": 39 }
-}
-```
+- **LiteLLM proxy**：`/typesafe/v1/systemone` 透传到官方，自带计费与日志
+- **LangChain**：`TypeSafeClassifier` 读 `TYPESAFE_BASE_URL`，可指向任意兼容网关
+- **自建转换层**：自己实现 `POST /v1/systemone`
 
-`confidence` 是**分布集中度**（0=均摊，1=全押一项），与最高项概率不是一回事。
-`boolean` 类型只返回 `probability`，**没有** `confidence`。
+完全离线跑 Jev 不可行 —— 官方未开放权重。
 
-### 实测性能
+### 潜在应用领域
 
-| 指标 | 实测值 |
-|---|---|
-| provider 侧延迟 | min 197ms / **P50 234ms** / max 271ms |
-| 并行多问题 | 4 个问题 231ms，与单问题几乎无差 |
-| 计费 | $0.042 / 1M input tokens，output 不计费 |
-| 单次成本 | 约 450–900 tokens ≈ **$0.00002–0.00004** |
+本项目的价值不在「让模型玩 2048」，而在于它是一台**可复现的上下文实验台**：
+
+- 研究「提示词 / 上下文如何影响分类模型的决策质量」
+- 对比不同网关（官方 / Vercel / OpenRouter / 自建）对同一模型输出的影响
+- 作为「结构化决策模型」接入形态的参考实现（SystemOne 协议的完整调用封装）
 
 ---
 
-## 界面
+## 贡献指南
 
-**画布优先的游戏画面**，视觉语言对齐 [jev-omega.vercel.app](https://jev-omega.vercel.app)：
-近黑底（`#0a0a0a`）、近乎单色、单一强调色、扁平无重阴影。
+### 项目分支情况
 
-### 为什么用 Canvas 而不是 DOM
+- `main`：基础版本，长期支持
+- `dev`：开发版本，持续开发（ℹ️**PR 主要在此分支合并**）
 
-DOM 绝对定位依赖 `clientWidth` 的测量时机 —— 字体加载、滚动条出现都会让缓存值失真，
-表现为「最后一列/行越界」或「字号算成 0、数字消失」。
-canvas 里每个像素都由自己计算，这类问题从根上不存在。
-副作用是动画要自己实现（`render.ts` 里的指数缓动 + rAF 循环）。
+### 贡献途径
 
-几何是**构造性正确**的：`2·pad + n·cell + (n-1)·gap` 恒等于边长，四边等距无需调参。
+- [GitHub Issues](https://github.com/ARCJ137442/jev-2048/issues)：反馈问题、建议、bug
+- [GitHub Pull Request](https://github.com/ARCJ137442/jev-2048/pulls)：直接向项目贡献代码
 
-### 空格子与数字格
-
-靠**明度对比**而非阴影：
-
-- **空格子** = 比棋盘底板更暗的「井」（`#0d0c0a` vs 底板 `#141210`）+ 1px 极淡内描边
-- **数字格** = 实色亮块，色阶按数值递进
-
-色阶是**暖橙色阶**，亮度与饱和度同时递增（不是单纯明暗）：
-
-| 数值 | 底色 | 说明 |
-|---|---|---|
-| 1 – 32 | `#2a2521` → `#8e5c12` | 暖褐渐亮，浅色文字 |
-| 64 – 256 | `#a76a0b` → `#d98c07` | 琥珀 → 橙，128 起翻转为深色文字 |
-| 512 – 1024 | `#f0a012` → `#ffb833` | 亮橙，带辉光 |
-| 2048 | `#ffd166` | 金黄，带辉光 |
-
-字体：`Geist` + `Geist Mono`，等宽数字带 `tabular-nums`。
-
-### 方向粒子
-
-Jev 决定后，在**本手瓷砖划过的轨迹上**撒方向箭头（每格 2–4 个），
-从大到小、从清晰到透明地消散。
-
-两个约束：
-- **尺寸锚定格子而非棋盘** —— 按棋盘算时 8×8 下单个箭头有 2 个格子大
-- **覆盖完整轨迹** —— 不能用前后网格做 diff（方块从第 0 行滑到第 3 行时，
-  中间格子前后都是空的，diff 会漏掉），要沿原位置→目标位置逐格标记，
-  且被合并吃掉的方块的路径同样要完整
-
-### 布局
-
-`html,body{height:100%;overflow:hidden}`，棋盘由 `ResizeObserver` 取
-`min(可用宽, 可用高)` 定尺寸，**任何窗口比例下都不会溢出首屏**。
-
-侧栏宽度由内容决定（`max-content` + 上下限），统计文字不换行。
-
----
-
-## 配置分区
-
-五个抽屉，顺序即**用户的自然动线**：
-
-> 先玩（游戏）→ 调整（策略）→ 接通模型（API）→ 回看发生了什么（日志）→ 把一切存下来（存档）
-
-分区依据是**「影响谁的输入」**，不是功能分类：
-
-| 抽屉 | 影响 Jev 输入 | 影响动作落实 | 内容 |
-|---|---|---|---|
-| **游戏** | ✗ | ✗ | 棋盘大小、新方块取值区间、**初始瓷砖个数**、动效 |
-| **策略 › 上下文** | **✓** | ✗ | 规则说明、策略提示、后果预测、记忆轮数 |
-| **策略 › 规则** | ✗ | **✓** | 决策策略、置信度门槛 |
-| **API** | ✗ | ✗ | 后端、密钥、自动重试 |
-| **日志** | — | — | 每次请求的完整往返，只读 |
-| **存档** | — | — | 导入 / 导出四类内容 |
-
-判据可以直接当回归测试用：**改一个游戏项，若概率分布变了，说明有 bug。**
-
-**步进间隔**是特例：既不进请求也不改变动作落实，只影响播放速度，
-所以只保留棋盘下方的实时滑块（实时控制 vs 配置项）。
-
----
-
-## 玩法与设置
-
-| 特性 | 说明 |
-|---|---|
-| **历史最高分 / 最大瓷砖** | 侧栏 `Best` 与 `B.Max`，按棋盘尺寸分别记录 |
-| **棋盘大小** | **宽高各自独立**，2 – 16。预设 4×4 / 6×6 / 8×8 / 16×2。历史纪录按「宽×高」分别记录 |
-| **新方块取值区间** | 只接受 **2 的幂次**（当前开放 2–4），默认 2–4 |
-| **生成分布** | **默认 `加权`** —— 权重为值的倒数（P(2)=2/3，实测 0.668）；可切换为 `均匀`（各值等概率）|
-| **初始瓷砖个数** | 默认 1–2。**下限强制 ≥1** —— 空棋盘上四方向都动不了，第一步就会判负，这是规则约束不是可选项 |
-| **记忆** | 把最近 n 轮的「局面 + 当时走的方向 + 当时得分」写进 `state.recent_history`。默认 **0**（不加入，等同原版）。滑块最右或点「最大」，则在上下文预算（32000 token 的 55%）内尽量塞满 |
-| **置信度门槛** | 0–100% 滑块。看着置信度图自己定：低于该值的回合会被标记。**不换算法** |
-| **密钥封存** | 明文密钥可封存成密文（AES-256-GCM），磁盘上不再出现明文 |
-| **自动重试** | 指数退避 + ±20% 抖动，上限 30s。最大次数可填 `inf` 表示无限。只对**瞬时故障**重试（网络错误 / 429 / 408 / 5xx） |
-| **刷新续玩** | 对局（棋盘、分数、轮次、记忆、日志）写入 localStorage，刷新后自动恢复 |
-| **日志面板** | 每次请求的完整往返：决策依据、延迟、token，可展开看原始请求/响应 JSON，支持单条复制或「复制全部」 |
-| **置信度追踪图** | 侧栏底部。每回合取概率分布的**最高/最低/中位**三个统计量：上下界填充面积带，中位数以带点折线标出。带宽越窄说明 Jev 越笃定 |
-| **移动端** | 单列布局（棋盘在上、仪表在下）、触摸目标 ≥40px、**棋盘滑动走棋** |
-
-### 持久化
-
-| 存储键 | 内容 | 生命周期 |
-|---|---|---|
-| `jev2048.v1` | 长期设置、上下文文本、重试参数、各尺寸历史纪录 | 永久 |
-| `jev2048.session.v1` | 当前这一局（棋盘、分数、轮次、记忆、调用日志），schema v2 | 一局 |
-
-存档 schema 从 v1 升到 v2：`size`（单值）拆成 `cols`/`rows`。
-旧档读入时会报不兼容，可用弹框里的「强行加载」抢救 —— 它会自动把 v1 的单值
-当作正方形边长，同时用作宽高。
-
-**API Key 绝不落盘。**
-
----
-
-## 存档：导入导出
-
-四类内容各自独立成档，可分别备份与恢复：
-
-| 档案 | 内容 | 导入 |
-|---|---|---|
-| **游戏（对局）** | 当前棋盘、分数、轮次、记忆 + 棋盘尺寸与历史纪录 | ✓ |
-| **策略** | 上下文（4 项）+ 规则（策略、阈值） | ✓ |
-| **API** | 重试参数，**不含密钥** | ✓ |
-| **日志** | 完整调用记录 | **✗ 只导出** |
-| **全部** | 以上全部 | ✓ |
-
-日志只导出不导入是刻意的：它是过程记录，导入覆盖当前日志没有语义。
-
-**导入按档案自称的类型限定作用范围** —— 策略档不会顺带改掉棋盘设置，
-API 档也不碰密钥。类型不匹配直接拒绝（`all` 档除外）。
-
-**校验刻意严格**：非法 JSON / 缺 `app` 标记 / 缺版本号 / 版本高于当前支持 /
-未知 `kind` / 缺 `payload` —— 全部明确报错。
-宁可让用户重新导出一份，也不把结构不对的数据悄悄写进状态。
-
-### 不兼容旧档的处理
-
-读到读不懂的存档时**不自动清理**，弹框让玩家选：
-
-| 选项 | 行为 |
-|---|---|
-| **导出旧数据** | 把原始字符串原样下载留底 |
-| **强行加载** | 尽力抢救：方块结构必须可用，其余字段缺失用默认值补齐，并**如实报告**抢救了什么、丢了什么 |
-| **重置回默认** | 二次确认后清除 |
-| **稍后再说** | 数据原样保留，不处理 |
-
-静默丢弃等于替玩家做了一个他没机会参与的决定，而丢掉的可能是几十手的对局。
-
----
-
-## 决策策略
-
-`src/client/decision.ts` 把概率分布转成实际动作。
-
-**设计前提：测量 Jev，不引入任何启发式。**
-
-- `UNCERTAINTY_THRESHOLD` 默认 **0**，threshold 策略永不触发升级
-- 若 Jev 首选的方向非法，**从它自己的分布里取概率最高的合法方向**
-- 拿不准时正确的做法不是悄悄换算法，而是**把不确定性暴露给用户**：
-  看着置信度图，自己决定阈值该设多少
-
-三种策略：
-
-- **贪心**（默认）— 取概率最高的合法方向
-- **概率采样** — 在合法方向里按归一化概率轮盘赌
-- **置信度门槛** — 仅在手动调高阈值后才可能触发标记
-
-> 想量化「Jev 比规则强多少」，应该做**对照实验**（另跑一版带规则的），
-> 而不是把两套逻辑混在同一次运行里 —— 那会让每一步都无法归因。
-
----
-
-## 三组可调参数
-
-本 Demo 的实验台，「策略 › 上下文」里的前三项。编辑后**立即生效于下一回合**。
-
-| 参数 | 注入位置 | 观察什么 |
-|---|---|---|
-| **规则说明** | `state.rule_description` | 规则描述越精确，早期回合决策是否越合理 |
-| **策略提示** | `state.strategy_hint` | 给出策略后，概率分布是否更集中（`confidence` 上升） |
-| **后果预测** | `questions.best_move.criteria` | **影响最大的开关**。开启时每个方向附带模拟结果（合并得分 / 剩余空格 / 最大块是否在角落），关闭时只有方向标签 |
-
-对照实验建议：固定棋盘，切换「后果预测」开关，比较同一局面的概率分布差异。
-
----
-
-## 后端支持
-
-| 后端 | 状态 |
-|---|---|
-| **免费试用 / 免费试用 2** | ✅ 本机与 Vercel 部署均可用。服务端持钥，浏览器零凭据。**两套额度互相独立**，一个用尽时另一个可能还有余量。界面上不暴露背后的提供商 |
-| OpenRouter 直连 | ✅ 已实测可用（`typesafe/jev-1.13`） |
-| **免费试用** | ✅ 实测端到端可用。服务端代为调用，密钥不进入浏览器。额度有限 |
-| Vercel AI Gateway 直连 | ✅ 实测可用，但密钥会进入浏览器内存 |
-| TypeSafe 官方 | ⚠️ 端点存在（403），请求体结构**未验证** |
-| OpenRouter | ⚠️ 端点存在（401，alpha），请求体结构**未验证** |
-| LM Studio | ⚠️ 协议演示模式。Jev 无开源权重，无法本地运行真正的 Jev |
-
----
-
-## 安全提醒
-
-- 请使用**专用且已设置消费限额**的 API Key
-- 服务器默认绑定 `0.0.0.0`，**同一局域网内任何设备**都能访问这个 Demo（以及通过它消耗你的额度）
-- 如不希望局域网共享，把 `src/server/server.ts` 中的 `"0.0.0.0"` 改为 `"127.0.0.1"` 后重新编译
-- `../local/vercel-secret-api-key` 是明文文件，已在 `.gitignore` 中排除
-
-### 部署到 Vercel（免费试用后端）
+### 提交前请确保
 
 ```bash
-vercel env add VERCEL_AI_GATEWAY_KEY    # 粘贴你的 Gateway Key
-vercel --prod
+node tools/check-dom.ts && npm test
 ```
 
-`api/evaluate.ts` 是 Serverless Function，`vercel.json` 已配好构建与输出目录。
-前端与本地开发**用的是同一个端点路径** `/api/evaluate`，所以本地与线上只有宿主机不同。
+`./start.sh` 与 CI 跑的是同一组检查 —— 本地能过，CI 就能过，反之亦然。
 
-**「免费试用」不需要加密 token。** 密钥只存在于 Vercel 的环境变量里，
-只在函数进程内被读取，从不进入任何响应体或客户端代码 —— **不下发就没有泄漏面**。
-真正需要加密的场景是「密钥必须交给浏览器」，那本就该避免。
+---
 
-额度控制靠 Vercel 项目侧的用量上限，不靠代码。
+<!-- 📝设计决策的完整理由见 DESIGN.md —— 那里记录的是「为什么这样做」，不是「做了什么」 -->
