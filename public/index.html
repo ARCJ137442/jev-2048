@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>2048 × TypeSafe Jev</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0a0a; --panel:#121110; --panel-2:#1a1816;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --ink:#fff; --ink-2:rgba(255,255,255,.6); --ink-3:rgba(255,255,255,.38); --ink-4:rgba(255,255,255,.2);
+  --accent:#f59e0b; --accent-2:#fbbf24; --accent-soft:rgba(245,158,11,.14); --red:#f87171;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --r:8px; --gut:clamp(12px,2.2vw,22px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--ink);
+  font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+
+/* ══ 顶栏 ══ */
+header{display:flex;align-items:center;gap:8px;padding:calc(var(--gut)*.55) var(--gut);
+  border-bottom:1px solid var(--line);flex-shrink:0}
+h1{font-size:clamp(15px,2.3vw,18px);font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+h1 .x{color:var(--accent);font-weight:400;margin:0 3px}
+.sub{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .spacer{flex:1}
+.hbtn{display:inline-flex;align-items:center;gap:6px;font:500 12.5px var(--sans);color:var(--ink-2);
+  cursor:pointer;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r);
+  padding:6px 11px;transition:.14s;white-space:nowrap}
+.hbtn:hover{background:#26221e;color:var(--ink);border-color:var(--line-2)}
+.hbtn svg{width:14px;height:14px;flex-shrink:0}
+@media(max-width:860px){ .hbtn .lbl{display:none} }
+@media(max-width:520px){ .sub{display:none} }
+
+button{font:500 12.5px var(--sans);color:var(--ink-2);cursor:pointer;background:var(--panel-2);
+  border:1px solid var(--line);border-radius:var(--r);padding:7px 13px;transition:.14s;white-space:nowrap}
+button:hover:not(:disabled){background:#26221e;color:var(--ink);border-color:var(--line-2);transform:translateY(-1px)}
+button:active:not(:disabled){transform:translateY(0)}
+button:disabled{opacity:.3;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#241500;font-weight:600}
+button.primary:hover:not(:disabled){background:var(--accent-2);border-color:var(--accent-2)}
+button.ghost{background:transparent}
+/* 运行中的暂停态：描边而非实心，一眼能看出「正在跑」 */
+button.running{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+button.running:hover:not(:disabled){background:rgba(245,158,11,.22);color:var(--accent-2)}
+button.mini{padding:5px 10px;font-size:11.5px}
+
+/* ══ 主区 ══ */
+/* 侧栏宽度由内容决定（max-content），并有上下限 —— 统计文字因此永远不会被挤到换行 */
+main{flex:1;min-height:0;display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(min-content,max-content);
+  gap:var(--gut);padding:var(--gut)}
+.stage{display:flex;flex-direction:column;min-height:0;min-width:0}
+.board-box{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+canvas#board{display:block;border-radius:12px}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:calc(var(--gut)*.55);flex-shrink:0}
+.hint{font:11px var(--mono);color:var(--ink-3);margin-left:auto;white-space:nowrap}
+kbd{font:600 10.5px var(--mono);background:var(--panel-2);border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:4px;padding:1px 5px;color:var(--ink-2)}
+.pace{display:flex;align-items:center;gap:10px;margin-top:9px;flex-shrink:0}
+.pace .lbl{font:11px var(--mono);color:var(--ink-3);white-space:nowrap}
+.pace .val{font:600 12px var(--mono);color:var(--accent);min-width:42px;text-align:right}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:20px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:rgba(255,255,255,.12)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  margin-top:-5px;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:rgba(255,255,255,.12)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+
+/* ══ 侧栏 ══ */
+.side{
+  display:flex;flex-direction:column;gap:9px;min-height:0;overflow:hidden;
+  width:max-content;min-width:252px;max-width:min(40vw,400px);
+}
+/* flex + nowrap：整行的 max-content 恰好等于「全部标签不换行」所需宽度，
+   于是外层的 max-content 轨道会自动把侧栏撑到刚好够用 */
+.stats{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.stat{background:var(--panel);padding:7px 9px;flex:1 1 auto;white-space:nowrap}
+.stat .k{font:9.5px var(--mono);color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.stat .v{font:600 15.5px var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:1px;white-space:nowrap}
+.stat .v.hi{color:var(--accent)}
+
+/* Jev 决策：flex:1 且设 min-height，保证永远不被图表挤扁 */
+.dec{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:11px;flex:1 1 auto;min-height:132px;overflow:auto}
+.dec-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;font:10px var(--mono);
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.dec-head .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.dec-head .turn{margin-left:auto;letter-spacing:0;text-transform:none;color:var(--ink-4)}
+.bars{display:flex;flex-direction:column;gap:5px}
+.bar{display:grid;grid-template-columns:16px 1fr 40px;gap:8px;align-items:center}
+.bar .d{font:600 11px var(--mono);color:var(--ink-3);text-align:center}
+.bar .t{display:block;height:14px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+/* ★ .f 必须显式 block —— 行内元素忽略 width/height */
+.bar .f{display:block;height:100%;width:0;border-radius:4px;background:rgba(255,255,255,.24);
+  transition:width .32s cubic-bezier(.3,.9,.35,1)}
+.bar .n{font:11px var(--mono);color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+.bar.win .d,.bar.win .n{color:var(--accent);font-weight:700}
+.bar.win .f{background:linear-gradient(90deg,#b06a05,var(--accent-2))}
+.meta{display:flex;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);
+  font:10.5px var(--mono);color:var(--ink-3);flex-wrap:wrap}
+.meta b{color:var(--ink-2);font-weight:600}
+.note-warn{margin-top:8px;font:10.5px/1.5 var(--mono);color:var(--accent)}
+.idle{font-size:12px;color:var(--ink-4);text-align:center;padding:20px 0}
+
+/* 置信度图：高度由 JS 按侧栏比例设定；flex-shrink:0 是关键 */
+.chartbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:8px;flex:0 0 auto;overflow:hidden}
+.chartbox .cap{display:flex;align-items:center;gap:6px;margin-bottom:3px;font:9.5px var(--mono);
+  letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.chartbox .cap .lgd{margin-left:auto;display:flex;gap:8px;letter-spacing:0;text-transform:none;font-size:9px}
+.chartbox .cap .lgd i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px;vertical-align:-1px}
+.chartbox canvas{display:block;width:100%}
+
+/* ══ 状态条 ══ */
+footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;flex-shrink:0;
+  padding:7px var(--gut);border-top:1px solid var(--line);font:11px var(--mono);color:var(--ink-3)}
+.led{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ink-4);
+  margin-right:6px;vertical-align:1px;transition:.2s}
+.led.on{background:var(--accent);box-shadow:0 0 7px var(--accent)}
+.led.busy{background:var(--accent-2);animation:bl .6s infinite}
+.led.err{background:var(--red);box-shadow:0 0 7px var(--red)}
+@keyframes bl{50%{opacity:.2}}
+footer b{color:var(--ink-2);font-weight:600}
+footer .spacer{flex:1}
+
+/* ══ 抽屉 ══ */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}
+.scrim.show{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,94vw);background:var(--panel);
+  border-left:1px solid var(--line);transform:translateX(100%);
+  transition:transform .24s cubic-bezier(.3,.9,.35,1);z-index:101;display:flex;flex-direction:column}
+.drawer.show{transform:none}
+.drawer.wide{width:min(620px,96vw)}
+.drawer > header{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:10px}
+.drawer > header svg{width:17px;height:17px;color:var(--accent);flex-shrink:0;margin-top:2px}
+.drawer > header h2{font-size:14px;font-weight:600}
+.drawer > header p{font-size:11.5px;color:var(--ink-4);margin-top:3px;line-height:1.5}
+.drawer .body{padding:16px 18px;overflow:auto;flex:1}
+.drawer > footer{border-top:1px solid var(--line);padding:12px 18px;display:flex;gap:8px}
+
+.field{margin-bottom:15px}
+/* ★ :not(.switch) —— 否则 display:block 会覆盖 .switch 的 flex，轨道塌陷 */
+.field > label:not(.switch){display:block;font:10.5px var(--mono);color:var(--ink-3);
+  letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px}
+.field .desc{font-size:11.5px;color:var(--ink-4);margin-bottom:6px;line-height:1.55}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.slider-row{display:flex;align-items:center;gap:10px}
+.slider-row .val{font:600 12px var(--mono);color:var(--accent);min-width:46px;text-align:right}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.presets button{flex:1;min-width:56px}
+.presets button.on{background:var(--accent);border-color:var(--accent);color:#241500;font-weight:600}
+textarea,.field input,.field select{width:100%;background:#0d0c0b;border:1px solid var(--line);
+  border-radius:6px;color:var(--ink-2);font:12px/1.6 var(--mono);padding:9px 10px;transition:.14s}
+textarea:focus,.field input:focus,.field select:focus{outline:none;border-color:var(--accent);
+  color:var(--ink);box-shadow:0 0 0 3px var(--accent-soft)}
+textarea{resize:vertical}
+.field input:disabled{color:var(--ink-4);cursor:not-allowed;user-select:none}
+.warnline{display:none;font:10.5px var(--mono);color:var(--red);margin-top:6px}
+.tinylbl{font:10px var(--mono);color:var(--ink-4);margin-top:5px}
+
+/* 策略抽屉内的两个分区 */
+.section-head{margin-bottom:12px}
+.section-head .sec-title{
+  display:inline-block;font:600 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);padding:3px 9px;border:1px solid rgba(245,158,11,.35);
+  border-radius:99px;background:rgba(245,158,11,.07);
+}
+.section-head .sec-note{display:block;font-size:11px;color:var(--ink-4);margin-top:7px;line-height:1.55}
+.divider{
+  height:1px;margin:22px 0 20px;
+  background:linear-gradient(90deg,transparent,var(--line-2) 15%,var(--line-2) 85%,transparent);
+  position:relative;
+}
+.divider::after{
+  content:"↓";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  background:var(--panel);padding:0 7px;color:var(--ink-4);font-size:10px;
+}
+
+/* 开关：显式 flex + 轨道 display:block（双保险） */
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.switch input{display:none}
+.switch .track{display:block;width:36px;height:20px;border-radius:99px;
+  background:rgba(255,255,255,.1);position:relative;transition:.18s;flex:0 0 36px}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;
+  border-radius:50%;background:var(--ink-3);transition:.18s}
+.switch input:checked + .track{background:rgba(245,158,11,.32)}
+.switch input:checked + .track::after{transform:translateX(16px);background:var(--accent)}
+.switch .txt{font-size:12.5px;color:var(--ink-2);flex:1;min-width:0}
+
+.warn{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.22);border-radius:6px;
+  padding:11px;font-size:11.5px;line-height:1.65;color:var(--ink-2);margin-bottom:15px}
+.warn b{color:var(--accent)}
+.note{font-size:11.5px;color:var(--ink-4);line-height:1.6;margin-bottom:14px;
+  padding-left:10px;border-left:1.5px solid var(--line-2)}
+
+/* ══ 日志 ══ */
+.lg{border:1px solid var(--line);border-radius:6px;margin-bottom:7px;background:#0f0e0d}
+.lg > summary{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;
+  font:11px var(--mono);list-style:none}
+.lg > summary::-webkit-details-marker{display:none}
+.lg[open] > summary{border-bottom:1px solid var(--line)}
+.lg.warn{border-color:rgba(245,158,11,.35)}
+.lg.err{border-color:rgba(248,113,113,.4)}
+.lgturn{color:var(--ink-4);min-width:28px}
+.lgmove{color:var(--accent);font-weight:700;font-size:13px;min-width:18px;text-align:center}
+.lgmove.err{color:var(--red);font-size:11px}
+.lgprobs{color:var(--ink-3)}
+.lgmeta{margin-left:auto;color:var(--ink-4);font-size:10px;white-space:nowrap}
+.lgbody{padding:10px}
+.lgrow{display:flex;gap:8px;margin-bottom:8px;font-size:11px}
+.lgrow > span{color:var(--ink-4);flex:0 0 60px}
+.lgrow code{color:var(--ink-2);font-family:var(--mono);word-break:break-all}
+.lgbtns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.lglabel{font:9.5px var(--mono);color:var(--ink-4);letter-spacing:.07em;text-transform:uppercase;margin:9px 0 4px}
+.lgbody pre{background:#080807;border:1px solid var(--line);border-radius:5px;padding:9px;
+  font:10.5px/1.55 var(--mono);color:var(--ink-2);overflow:auto;max-height:230px;white-space:pre-wrap;word-break:break-all}
+
+/* ══ 覆盖层 ══ */
+.overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;background:rgba(10,10,10,.9);backdrop-filter:blur(4px);
+  z-index:50;border-radius:12px;text-align:center;padding:22px}
+.overlay.show{display:flex}
+.overlay h2{font-size:17px;font-weight:600}
+.overlay p{font-size:12.5px;color:var(--ink-3);max-width:330px;line-height:1.65}
+.overlay p.err{font-family:var(--mono);font-size:10.5px;color:#e0a0a0;word-break:break-all;
+  max-height:120px;overflow:auto}
+.fb{position:absolute;inset:0;border:1.5px solid var(--accent-2);border-radius:12px;
+  pointer-events:none;opacity:0;transition:opacity .2s;z-index:40}
+.fb.on{opacity:.8}
+.fb span{position:absolute;top:0;left:50%;transform:translate(-50%,-50%);background:var(--accent-2);
+  color:#1a1400;font:700 9px var(--mono);letter-spacing:.08em;padding:2px 8px;border-radius:99px}
+
+/* ══════════ 平板 / 窄桌面：侧栏收窄，棋盘优先 ══════════ */
+@media(max-width:900px){
+  .side{min-width:224px}
+  .stat{padding:6px 7px}
+  .stat .v{font-size:14px}
+  .stat .k{font-size:9px;letter-spacing:.02em}
+}
+
+/* ══════════ 移动端：棋盘在上，仪表在下 ══════════ */
+@media(max-width:760px){
+  :root{--gut:10px}
+
+  /* 单列：棋盘占据剩余高度，侧栏在下方横向排布 */
+  main{
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(0,1fr) auto;
+    gap:9px;padding:9px;
+  }
+
+  /* 侧栏横向铺开，宽度回到 100%，不再受 max-content 约束 */
+  .side{
+    flex-direction:row;width:100%;min-width:0;max-width:none;
+    gap:8px;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+  .stats{flex:1 1 auto;min-width:0}
+  .stat{padding:6px 8px}
+  .dec{flex:1 1 190px;min-width:190px;min-height:104px;padding:9px}
+  .chartbox{flex:0 0 168px;min-width:168px}
+
+  /* 概览行在移动端只保留最关键的三个，其余让位给决策面板 */
+  .stats .stat:nth-child(2),
+  .stats .stat:nth-child(4){display:none}
+
+  .hint{display:none}
+  .pace{margin-top:7px}
+  .controls{gap:6px;padding-top:7px}
+
+  /* 触摸目标不小于 40px */
+  button{padding:9px 14px;min-height:40px}
+  button.mini{min-height:32px;padding:5px 10px}
+  .hbtn{padding:8px 11px;min-height:40px}
+
+  /* 抽屉占满宽度，底部按钮固定在触手可及的位置 */
+  .drawer,.drawer.wide{width:100%;max-width:100%;border-left:none}
+  .drawer .body{padding:14px 15px}
+  .drawer > footer{padding:11px 15px}
+  .drawer > footer button{flex:1}
+
+  /* 滑块加高，便于手指拖动 */
+  input[type=range]{height:28px}
+  input[type=range]::-webkit-slider-thumb{width:18px;height:18px;margin-top:-7.5px}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px}
+  .switch .track{width:42px;height:24px;flex-basis:42px}
+  .switch .track::after{width:18px;height:18px}
+  .switch input:checked + .track::after{transform:translateX(18px)}
+
+  .presets button{min-height:40px}
+}
+
+/* ══════════ 小屏手机 ══════════ */
+@media(max-width:430px){
+  h1{font-size:15px}
+  .stat .v{font-size:13.5px}
+  .stat .k{font-size:8.5px}
+  .stats .stat:nth-child(3){display:none}  /* 只剩 Score / Max / Best Max */
+  .dec{flex-basis:150px;min-width:150px}
+  .chartbox{flex-basis:132px;min-width:132px}
+  .bar{grid-template-columns:15px 1fr 36px;gap:6px}
+  .bar .n{font-size:10px}
+}
+
+/* ══════════ 横屏手机：高度紧张，压缩纵向留白 ══════════ */
+@media(max-height:460px) and (orientation:landscape){
+  header{padding:5px 12px}
+  main{padding:7px;gap:8px}
+  .pace{margin-top:4px}
+  .controls{padding-top:5px}
+  .chartbox{display:none}
+  footer{padding:5px 12px}
+}
+
+/* ══════════ 触摸设备：去掉 hover 位移，避免误触后卡住 ══════════ */
+@media(hover:none){
+  button:hover:not(:disabled){transform:none;background:var(--panel-2);color:var(--ink-2);border-color:var(--line)}
+  button.primary:hover:not(:disabled){background:var(--accent);border-color:var(--accent);color:#241500}
+  button.running:hover:not(:disabled){background:var(--accent-soft);color:var(--accent)}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>2048 <span class="x">×</span> TypeSafe Jev</h1>
+  <span class="sub" title="每一手都由 Jev 评估模型决定 —— 它返回带校准概率的决策，而非生成的文本">决策由 Jev 评估模型给出</span>
+  <span class="spacer"></span>
+
+  <button class="hbtn" id="bGame" title="棋盘大小、新方块取值区间、动效 —— 与玩家和 Jev 的操作无关的自然属性">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/>
+    </svg><span class="lbl">游戏</span>
+  </button>
+
+  <button class="hbtn" id="bStrategy" title="上下文（影响 Jev 看到什么）与规则（影响动作如何落实）">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18" cy="12" r="2.2" fill="currentColor" stroke="none"/>
+    </svg><span class="lbl">策略</span>
+  </button>
+
+  <button class="hbtn" id="bApi" title="用哪个提供商、怎么调用">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3.4"/>
+    </svg><span class="lbl">API</span>
+  </button>
+
+  <button class="hbtn" id="bLog" title="每一次请求的完整往返记录">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/>
+    </svg><span class="lbl">日志</span>
+  </button>
+</header>
+
+<main>
+  <section class="stage">
+    <div class="board-box">
+      <canvas id="board"></canvas>
+      <div class="fb" id="fb"><span>启发式回退</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="primary" id="bToggle" title="让 Jev 接管 / 暂停自动走棋（空格）">▶ 让 Jev 接管</button>
+      <button id="bStep" title="只走一手">单步</button>
+      <button id="bNew" class="ghost" title="重开一局，保留全部设置">↺ 重开</button>
+      <span class="hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> 手动 · <kbd>Space</kbd> 暂停</span>
+    </div>
+
+    <div class="pace">
+      <span class="lbl">步进间隔</span>
+      <input type="range" id="pace" min="100" max="5000" step="100" value="2000" title="自动走棋的间隔，0.1s – 5s">
+      <span class="val" id="paceVal">2.0s</span>
+    </div>
+  </section>
+
+  <aside class="side">
+    <div class="stats">
+      <div class="stat"><div class="k">Score</div><div class="v" id="sScore">0</div></div>
+      <div class="stat"><div class="k">Best</div><div class="v hi" id="sBest">0</div></div>
+      <div class="stat"><div class="k">Turn</div><div class="v" id="sTurn">0</div></div>
+      <div class="stat"><div class="k">Max</div><div class="v" id="sMax">0</div></div>
+      <div class="stat"><div class="k">B.Max</div><div class="v hi" id="sBestMax">0</div></div>
+    </div>
+
+    <div class="dec">
+      <div class="dec-head"><span class="dot"></span><span>Jev 决策</span><span class="turn" id="dTurn"></span></div>
+      <div id="decision"><div class="idle">尚未开始</div></div>
+    </div>
+
+    <div class="chartbox" id="chartBox">
+      <div class="cap">
+        <span>置信度追踪</span>
+        <span class="lgd">
+          <span><i style="background:rgba(245,158,11,.35)"></i>上/下界</span>
+          <span><i style="background:#f59e0b"></i>中位</span>
+        </span>
+      </div>
+      <canvas id="chart"></canvas>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <span><span class="led" id="led"></span><span id="status">就绪</span></span>
+  <span>累计 <b id="cost">$0</b></span>
+  <span>延迟 <b id="lat">—</b></span>
+  <span class="spacer"></span>
+  <span id="backend">—</span>
+</footer>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- ══════ 游戏：只放「自然属性」——与玩家和 Jev 的操作都无关 ══════ -->
+<aside class="drawer" id="dGame">
+  <header>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/>
+    </svg>
+    <div>
+      <h2>游戏</h2>
+      <p>棋盘与新方块的自然属性。这里改任何东西，都不会影响 Jev 看到的内容，也不影响它怎么决策。</p>
+    </div>
+  </header>
+  <div class="body">
+    <div class="field">
+      <label>棋盘大小</label>
+      <div class="presets" id="sizePresets">
+        <button data-size="4">4 × 4</button>
+        <button data-size="6">6 × 6</button>
+        <button data-size="8">8 × 8</button>
+      </div>
+      <div style="margin-top:8px"><select id="inpSize"></select></div>
+      <div class="tinylbl">切换尺寸会立即重开一局。历史最高分按尺寸分别记录。</div>
+    </div>
+
+    <div class="field">
+      <label>新方块取值区间</label>
+      <div class="desc">只能填 2 的幂次（1、2、4、8…）。上界留空表示不限。</div>
+      <div class="row2">
+        <input type="number" id="inpSpawnMin" min="1" step="1" placeholder="最小 2">
+        <input type="number" id="inpSpawnMax" min="1" step="1" placeholder="最大（可留空）">
+      </div>
+      <div class="warnline" id="spawnWarn">必须是 2 的幂次（1,2,4,8…），且上界不小于下界</div>
+    </div>
+
+    <div class="field">
+      <label>动效</label>
+      <label class="switch" style="margin-bottom:9px">
+        <input type="checkbox" id="inpAnim" checked>
+        <span class="track"></span><span class="txt">滑动 / 合并 / 入场动画</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="inpParticles" checked>
+        <span class="track"></span><span class="txt">决策方向箭头粒子</span>
+      </label>
+    </div>
+  </div>
+  <footer>
+    <button id="bGameReset" class="ghost" title="棋盘尺寸、新方块区间、动效回到出厂值">恢复默认</button>
+    <span style="flex:1"></span>
+    <button id="bGameDone" class="primary">完成</button>
+  </footer>
+</aside>
+
+<!-- ══════ 策略：上下文（喂给 Jev）+ 规则（怎么落实动作）══════ -->
+<aside class="drawer" id="dStrategy">
+  <header>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18" cy="12" r="2.2" fill="currentColor" stroke="none"/>
+    </svg>
+    <div>
+      <h2>策略</h2>
+      <p>分两部分：<b style="color:var(--accent);font-weight:600">上下文</b>决定 Jev 看到什么，<b style="color:var(--accent);font-weight:600">规则</b>决定拿到答案后怎么做。</p>
+    </div>
+  </header>
+  <div class="body">
+    <div class="section-head">
+      <span class="sec-title">上下文</span>
+      <span class="sec-note">改动会进入请求，影响 Jev 的判断 —— 效果看「概率分布」</span>
+    </div>
+
+    <div class="field">
+      <label>规则说明 → state.rule_description</label>
+      <textarea id="ruleDesc" rows="5"></textarea>
+    </div>
+
+    <div class="field">
+      <label>策略提示 → state.strategy_hint</label>
+      <textarea id="hintText" rows="6"></textarea>
+    </div>
+
+    <div class="field">
+      <label>后果预测 → questions.criteria</label>
+      <label class="switch">
+        <input type="checkbox" id="inpCons" checked>
+        <span class="track"></span><span class="txt">包含每步的具体后果</span>
+      </label>
+      <div class="desc" style="margin-top:8px;margin-bottom:0">
+        开启后每个候选方向附带合并得分、剩余空格、最大块是否在角落。关掉它，Jev 只能看到方向名。
+      </div>
+    </div>
+
+    <div class="field">
+      <label>记忆轮数 → state.recent_history</label>
+      <div class="desc">
+        把最近 n 轮的「局面 + 当时走的方向 + 当时得分」一并发给 Jev。0 = 不加入（原版行为）。
+      </div>
+      <div class="slider-row">
+        <input type="range" id="inpMemory" min="0" max="30" step="1" value="0">
+        <span class="val" id="memoryVal">0</span>
+        <button class="mini" id="bMemMax" title="在上下文预算内尽量塞满">最大</button>
+      </div>
+      <div class="tinylbl">上限受模型上下文窗口约束（32000 token 的 55% 预算）。</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-head">
+      <span class="sec-title">规则</span>
+      <span class="sec-note">不进入请求，Jev 看不到 —— 效果看「实际走了哪一步」</span>
+    </div>
+
+    <div class="field">
+      <label>决策策略</label>
+      <select id="inpStrategy">
+        <option value="greedy">贪心 — 取概率最高的合法方向</option>
+        <option value="sample">概率采样 — 按分布随机（有探索性）</option>
+        <option value="threshold">置信度门槛 — 低于阈值时标记</option>
+      </select>
+      <div class="desc" style="margin-top:6px;margin-bottom:0">
+        本 Demo 不含启发式兜底：拿不准时不换别的算法，而是把不确定性标出来交给你判断。
+      </div>
+    </div>
+
+    <div class="field" id="thresholdRow" style="display:none">
+      <label>置信度门槛</label>
+      <div class="desc">看着侧栏的置信度追踪图来定：低于该值的回合会被标记。</div>
+      <div class="slider-row">
+        <input type="range" id="inpThreshold" min="0" max="100" step="5" value="0">
+        <span class="val" id="thresholdVal">0%</span>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <button id="bStrategyReset" class="ghost" title="上下文与规则全部回到出厂值">恢复默认</button>
+    <span style="flex:1"></span>
+    <button id="bStrategyDone" class="primary">完成</button>
+  </footer>
+</aside>
+
+<!-- ══════ API ══════ -->
+<aside class="drawer" id="dApi">
+  <header>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3.4"/>
+    </svg>
+    <div>
+      <h2>API</h2>
+      <p>用哪个提供商、怎么调用。这里只影响请求如何送达，不改变提示词或游戏规则。</p>
+    </div>
+  </header>
+  <div class="body">
+    <div class="warn">
+      <b>密钥安全</b><br>
+      「本机代理」模式下 API Key 由服务器进程持有，浏览器全程接触不到。
+      切换到直连后端时，密钥会进入浏览器内存。
+    </div>
+
+    <div class="field"><label>后端</label><select id="selBackend"></select></div>
+    <div class="field"><label>API Key</label><input type="password" id="inpKey" autocomplete="off"></div>
+    <div class="field"><label>Base URL</label><input type="text" id="inpBase"></div>
+    <div class="field"><label>Model ID</label><input type="text" id="inpModel"></div>
+
+    <div class="field">
+      <label>自动重试</label>
+      <div class="desc">
+        只对瞬时故障重试（网络错误 / 429 / 5xx）。参数错误、鉴权失败会直接报错。
+        填 <code>inf</code> 表示无限重试。
+      </div>
+      <div class="row2">
+        <input type="text" id="inpRetryMax" placeholder="最大次数，或 inf">
+        <input type="number" id="inpRetryBase" min="100" max="10000" step="100" placeholder="退避基数 ms">
+      </div>
+      <div class="tinylbl" id="retryPreview"></div>
+    </div>
+
+    <div class="note" id="backendNote"></div>
+  </div>
+  <footer>
+    <button id="bApiReset" class="ghost" title="自动重试参数回到出厂值；后端与密钥不受影响">恢复默认</button>
+    <span style="flex:1"></span>
+    <button id="bApiCancel" class="ghost">取消</button>
+    <button id="bSaveApi" class="primary">保存</button>
+  </footer>
+</aside>
+
+<!-- ══════ 日志 ══════ -->
+<aside class="drawer wide" id="dLog">
+  <header>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/>
+    </svg>
+    <div><h2>调用日志 <span id="logCount" style="font:400 11px var(--mono);color:var(--ink-4)"></span></h2>
+    <p>每一次请求的完整往返。展开可看原始 JSON 并单独复制。</p></div>
+  </header>
+  <div class="body" id="logList"><div class="idle">还没有请求记录</div></div>
+  <footer>
+    <button id="bCopyAll">复制全部</button>
+    <button id="bLogClear" class="ghost" title="清空全部调用日志（不可撤销）">清空</button>
+    <span style="flex:1"></span>
+    <button id="bLogDone" class="primary">完成</button>
+  </footer>
+</aside>
+
+<script type="module" src="./js/client/main.js"></script>
+</body>
+</html>

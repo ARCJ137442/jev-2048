@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "dist-test",
+    "sourceMap": false
+  },
+  "include": [
+    "src/test/**/*.ts",
+    "src/client/engine.ts",
+    "src/client/metrics.ts",
+    "src/shared/**/*.ts"
+  ]
+}
