@@ -206,6 +206,14 @@ export interface BackendConfig {
   verified: boolean;
   /** 是否需要用户在浏览器中输入密钥（代理模式不需要） */
   needsKey: boolean;
+  /**
+   * 是否在界面上展示 Base URL。
+   *
+   * 刻意**不复用 needsKey** 判断：两者看似相关，实则独立 ——
+   * 「自建 / 本地兼容端点」不需要密钥，但它的地址恰恰是用户必须改的；
+   * 而两个免费试用后端不需要密钥，地址也是本站内部选择、不该展示。
+   */
+  showBaseUrl: boolean;
 }
 
 export type Strategy = "greedy" | "sample" | "threshold";

@@ -8,6 +8,7 @@ import {
   ROWS,
   SPAWN_ALLOWED,
   setBoardSize,
+  type BackendConfig,
   type BackendId,
   type ChoiceAnswer,
   type Direction,
@@ -1516,22 +1517,56 @@ function confirmAction(msg: string, fn: () => void): void {
 const selBackend = $<HTMLSelectElement>("selBackend");
 const inpKey = $<HTMLInputElement>("inpKey");
 
-function refreshBackend(): void {
-  const b = BACKENDS[selBackend.value as BackendId];
-  $<HTMLInputElement>("inpBase").value = b.base;
-  $<HTMLInputElement>("inpModel").value = b.model;
+/**
+ * 状态栏的后端标签 —— **单一来源**。
+ *
+ * 之前有三处各写各的（启动、保存设置、静态托管分支），
+ * 于是「改了模型但状态栏没变」这类不一致迟早出现。
+ */
+function updateBackendLabel(): void {
+  const b = BACKENDS[state.cfg.provider];
+  const label = b.needsKey || !staticHost ? b.label : `${b.label}（远端）`;
+  const el = $("backend");
+  el.textContent = `${label} · ${state.cfg.model}`;
+  el.title = `当前后端：${label}\n模型：${state.cfg.model}`;
+}
 
-  // 开箱即用的后端不暴露实现细节 —— 端点、模型 ID 这些是本站的内部选择，
-  // 用户既改不了也不需要知道，展示出来只会造成「我是不是配错了」的困惑。
-  const advanced = b.needsKey;
-  $("advancedApi").style.display = advanced ? "" : "none";
-  $("freeTrialNote").style.display = advanced ? "none" : "";
-  $("backendNote").textContent = advanced
-    ? (b.verified ? "✅ 已验证可用。" : "⚠ 未经实测验证。") + b.note
-    : "";
-  $("backendNote").style.display = advanced ? "" : "none";
+/** 把某个后端的默认地址填进 Base URL（那是个真值，留空没意义） */
+function fillBackendDefaults(id: BackendId): void {
+  $<HTMLInputElement>("inpBase").value = BACKENDS[id].base;
+}
 
-  if (advanced) {
+/**
+ * 填模型输入框。
+ *
+ * 用**占位符**承载默认值，而不是预填成值 —— 这样一眼能区分两种状态：
+ *   输入框空着  → 用的是后端默认（占位符里灰字显示的就是它）
+ *   输入框有值  → 这是自定义的模型
+ *
+ * 预填成值的话两者看起来一模一样，用户没法知道当前跑的是默认还是自己改过的。
+ */
+function fillModelField(b: BackendConfig, current: string): void {
+  const el = $<HTMLInputElement>("inpModel");
+  el.placeholder = b.model;
+  el.value = current && current !== b.model ? current : "";
+}
+
+/** 按后端类型决定哪些字段可编辑、哪些提示要显示 */
+function applyBackendGating(b: BackendConfig): void {
+  // Base URL 是本站的内部选择（开箱即用后端尤其如此），不展示；
+  // Model ID 则对所有后端可见可改 —— 用户可能想换模型做对比实验。
+  $("advancedApi").style.display = b.showBaseUrl ? "" : "none";
+
+  $("modelHint").textContent = b.needsKey
+    ? `留空即用该后端的默认模型（${b.model}）`
+    : "通常无需改动，留空即用本站默认模型";
+
+  $("backendNote").textContent = b.verified || !b.needsKey
+    ? (b.verified && b.needsKey ? "✅ 已验证可用。" : "") + (b.needsKey ? b.note : "")
+    : "⚠ 未经实测验证。" + b.note;
+  $("backendNote").style.display = $("backendNote").textContent ? "" : "none";
+
+  if (b.needsKey) {
     inpKey.disabled = false;
     inpKey.placeholder = "粘贴你的 API Key（仅存内存，刷新即清除）";
     inpKey.style.userSelect = "auto";
@@ -1541,6 +1576,38 @@ function refreshBackend(): void {
     inpKey.placeholder = "无需填写 —— 开箱即用";
     inpKey.style.userSelect = "none";
   }
+}
+
+/**
+ * 切换后端时调用：把该后端的默认端点与模型预置进表单。
+ *
+ * 这是「日常操作丝滑」的关键 —— 换后端不必去查它的模型 ID 是什么。
+ * 代价是切走再切回会丢掉手改的模型值，但那正是「预置默认」的语义。
+ */
+function onBackendSwitch(): void {
+  const id = selBackend.value as BackendId;
+  const b = BACKENDS[id];
+  fillBackendDefaults(id);
+  // 换后端 = 回到该后端的默认模型，所以输入框清空、占位符换成新默认值
+  fillModelField(b, "");
+  applyBackendGating(b);
+}
+
+/**
+ * 打开抽屉时调用：填**当前生效的配置**，而不是后端默认值。
+ *
+ * 与 onBackendSwitch 分开是必须的：
+ * 如果打开抽屉也走默认值路径，用户刚改好的模型会在下次打开时被悄悄冲掉。
+ */
+function onApiDrawerOpen(): void {
+  const b = BACKENDS[state.cfg.provider];
+  selBackend.value = state.cfg.provider;
+  $<HTMLInputElement>("inpBase").value = state.cfg.base;
+  fillModelField(b, state.cfg.model);
+  applyBackendGating(b);
+
+  // 直连后端才有密钥可填，且浏览器不保存它 —— 每次打开都是空的
+  if (b.needsKey) inpKey.value = "";
 }
 
 function syncApiUi(): void {
@@ -1613,7 +1680,7 @@ $("bNew").onclick = newGame;
 $("bArchive").onclick = () => openDrawer("dArchive");
 $("bGame").onclick = () => openDrawer("dGame");
 $("bStrategy").onclick = () => openDrawer("dStrategy");
-$("bApi").onclick = () => openDrawer("dApi");
+$("bApi").onclick = () => { onApiDrawerOpen(); openDrawer("dApi"); };
 $("bLog").onclick = () => { renderLog(); openDrawer("dLog"); };
 
 /* 导入导出 */
@@ -1680,7 +1747,7 @@ $("bCopyAll").onclick = (e) => {
   }));
   void copyText(fmtJson(all), e.currentTarget as HTMLButtonElement);
 };
-selBackend.onchange = refreshBackend;
+selBackend.onchange = onBackendSwitch;
 scrim.onclick = closeDrawers;
 for (const id of ["bArchiveDone", "bGameDone", "bStrategyDone", "bApiCancel", "bLogDone"]) {
   $(id).onclick = closeDrawers;
@@ -1723,17 +1790,16 @@ for (const [id, b] of Object.entries(BACKENDS)) {
 const served = location.protocol === "http:" || location.protocol === "https:";
 const staticHost = isStaticHosting();
 if (served) {
-  selBackend.value = "localproxy";
-  state.cfg = { provider: "localproxy", base: "/api/evaluate", model: "typesafe-ai/jev", apiKey: "" };
-  $("backend").textContent = staticHost ? "免费试用（远端）" : "免费试用";
+  state.cfg = { provider: "localproxy", base: BACKENDS.localproxy.base, model: BACKENDS.localproxy.model, apiKey: "" };
   setLed("", "就绪");
 } else {
-  selBackend.value = "vercel";
   state.cfg = { provider: "vercel", base: BACKENDS.vercel.base, model: BACKENDS.vercel.model, apiKey: "" };
-  $("backend").textContent = "未配置";
   setLed("", "请在 API 中配置");
 }
-refreshBackend();
+selBackend.value = state.cfg.provider;
+fillBackendDefaults(state.cfg.provider);
+applyBackendGating(BACKENDS[state.cfg.provider]);
+updateBackendLabel();
 
 /**
  * 启动。
@@ -1759,7 +1825,7 @@ function boot(): void {
     "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
     "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
     "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
-    "advancedApi", "freeTrialNote",
+    "advancedApi", "modelHint",
     "logList", "logCount", "bCopyAll", "bLogClear",
   ]);
 
