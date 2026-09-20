@@ -478,11 +478,14 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
 
     <div class="notice-line">
-      建议顺序：先点「导出旧数据」留底，再点「重置回默认」。
+      <b style="color:var(--accent)">强行加载</b>会尽力从这份数据里抢救出可用的部分：
+      棋盘与分数通常没问题，读不懂的字段会被丢弃并如实告知。<br>
+      建议顺序：先「导出旧数据」留底，再决定强行加载还是重置。
     </div>
 
     <div class="actions-wrap">
       <button id="bIncompatExport">⬇ 导出旧数据</button>
+      <button id="bIncompatForce" class="primary">强行加载</button>
       <button id="bIncompatReset" class="danger">重置回默认</button>
       <button id="bIncompatLater" class="ghost">稍后再说</button>
     </div>
@@ -584,6 +587,18 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
         <input type="number" id="inpSpawnMax" min="1" step="1" placeholder="最大（可留空）">
       </div>
       <div class="warnline" id="spawnWarn">必须是 2 的幂次（1,2,4,8…），且上界不小于下界</div>
+    </div>
+
+    <div class="field">
+      <label>初始瓷砖个数区间</label>
+      <div class="desc">
+        开局时随机摆放几个瓷砖。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。
+      </div>
+      <div class="row2">
+        <input type="number" id="inpInitMin" min="1" step="1" placeholder="最小 1">
+        <input type="number" id="inpInitMax" min="1" step="1" placeholder="最大 2">
+      </div>
+      <div class="warnline" id="initWarn">下限至少为 1，且不得大于上限</div>
     </div>
 
     <div class="field">

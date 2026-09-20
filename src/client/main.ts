@@ -31,6 +31,8 @@ import {
 } from "./engine.js";
 import {
   clearSession,
+  commitForced,
+  forceLoadSession,
   loadSession,
   maxTileId,
   rawSession,
@@ -70,6 +72,7 @@ import {
   MAX_RETRY,
   clamp01,
   clampBoardSize,
+  clampInitial,
   clampSpawn,
   bestTileFor,
   highScoreFor,
@@ -92,8 +95,31 @@ const CHARS_PER_TOKEN = 2.6;
 /** 留给规则/策略/棋盘等固定内容的安全余量 */
 const MEMORY_TOKEN_BUDGET = Math.floor(CONTEXT_WINDOW * 0.55);
 
+/**
+ * 取 DOM 元素。
+ *
+ * 拿不到时返回 null（类型上被断言掉了），后续访问会抛
+ * 「Cannot read properties of null」。这种错误若发生在**模块求值阶段**，
+ * 会静默中断整个启动流程 —— 表现为「棋盘空白、点一下直接判负」，
+ * 与真正的原因（一个多出来的字符串）毫无关联，排查成本极高。
+ *
+ * 两道防线：
+ *   1. boot() 里用 assertDom() 一次性核对全部 id
+ *   2. 构建前由 tools/check-dom.ts 静态比对，从源头拦住
+ */
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T;
+
+/** 启动自检：把所有缺失的 id 一次性报出来，而不是让第一个 null 静默炸掉 */
+function assertDom(ids: string[]): void {
+  const missing = ids.filter((id) => !document.getElementById(id));
+  if (missing.length) {
+    throw new Error(
+      `页面缺少 ${missing.length} 个必需元素：${missing.map((m) => "#" + m).join(", ")}\n` +
+        `这通常意味着 index.html 与 main.ts 不同步。`,
+    );
+  }
+}
 
 /* ═══════════ 持久化 + 渲染器 ═══════════ */
 
@@ -706,11 +732,16 @@ function newGame(): void {
   renderLog();
 
   const g = store.game;
-  state.tiles.push(
-    makeTile(g.spawnMin, Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE)),
-  );
-  const t2 = spawnTile(state.tiles, g.spawnMin, g.spawnMax);
-  if (t2) state.tiles.push(t2);
+  placeInitialTiles();
+
+  // 硬护栏：无论如何都不能留一个空棋盘给玩家 —— 那会让第一步直接判负。
+  // 真走到这里说明上面出了问题，宁可多放一个也不能为零。
+  if (state.tiles.length === 0) {
+    console.warn("[Jev×2048] 初始瓷砖放置失败，已兜底放置一个");
+    state.tiles.push(
+      makeTile(g.spawnMin, Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE)),
+    );
+  }
 
   state.best = highScoreFor(store, SIZE);
   state.bestTile = bestTileFor(store, SIZE);
@@ -735,6 +766,26 @@ function newGame(): void {
   setLed("", "就绪");
   fitBoard();
   fitChart();
+}
+
+/**
+ * 开局摆放瓷砖。
+ *
+ * 个数从配置区间里随机取，下限由 clampInitial 强制为 1 ——
+ * 空棋盘上四个方向都动不了，第一步就会判负。
+ */
+function placeInitialTiles(): void {
+  const g = store.game;
+  const lo = clampInitial(g.initialMin, 1);
+  const hi = Math.max(lo, clampInitial(g.initialMax, lo));
+  const count = lo + Math.floor(Math.random() * (hi - lo + 1));
+  const cap = SIZE * SIZE;              // 不可能超过格子总数
+
+  for (let i = 0; i < Math.min(count, cap); i++) {
+    const t = spawnTile(state.tiles, g.spawnMin, g.spawnMax);
+    if (!t) break;                      // 盘面已满
+    state.tiles.push(t);
+  }
 }
 
 /**
@@ -913,6 +964,8 @@ function syncGameUi(): void {
   }
   $<HTMLInputElement>("inpSpawnMin").value = String(g.spawnMin);
   $<HTMLInputElement>("inpSpawnMax").value = g.spawnMax === null ? "" : String(g.spawnMax);
+  $<HTMLInputElement>("inpInitMin").value = String(g.initialMin);
+  $<HTMLInputElement>("inpInitMax").value = String(g.initialMax);
   $<HTMLInputElement>("inpAnim").checked = g.animations;
   $<HTMLInputElement>("inpParticles").checked = g.particles;
   $<HTMLSelectElement>("inpStrategy").value = g.strategy;
@@ -931,6 +984,8 @@ function applyGameSettings(): void {
 
   g.spawnMin = min;
   g.spawnMax = max === null ? null : Math.max(min, max);
+  g.initialMin = clampInitial($<HTMLInputElement>("inpInitMin").value, DEFAULT_GAME.initialMin);
+  g.initialMax = Math.max(g.initialMin, clampInitial($<HTMLInputElement>("inpInitMax").value, g.initialMin));
   g.animations = $<HTMLInputElement>("inpAnim").checked;
   g.particles = $<HTMLInputElement>("inpParticles").checked;
   // 步进间隔只由棋盘下方的滑块控制，不在这里重复设置
@@ -954,6 +1009,15 @@ function validateSpawn(): boolean {
     !isPowerOfTwo(Math.round(minV)) ||
     (maxV !== null && (!isPowerOfTwo(Math.round(maxV)) || maxV < minV));
   $("spawnWarn").style.display = bad ? "block" : "none";
+  return !bad;
+}
+
+/** 初始瓷砖个数：下限必须是 ≥1 的整数，且不得大于上限 */
+function validateInitial(): boolean {
+  const lo = Number($<HTMLInputElement>("inpInitMin").value);
+  const hi = Number($<HTMLInputElement>("inpInitMax").value);
+  const bad = !Number.isInteger(lo) || !Number.isInteger(hi) || lo < 1 || hi < lo;
+  $("initWarn").style.display = bad ? "block" : "none";
   return !bad;
 }
 
@@ -985,9 +1049,14 @@ function bindGameSettings(): void {
   $("inpSpawnMin").addEventListener("change", onSpawn);
   $("inpSpawnMax").addEventListener("change", onSpawn);
 
-  for (const id of ["inpAnim", "inpParticles", "inpPace", "inpStrategy"]) {
+  // 步进间隔不在这里 —— 它只由棋盘下方的滑块控制（见 syncPaceUi）
+  for (const id of ["inpAnim", "inpParticles", "inpStrategy"]) {
     $(id).addEventListener("change", applyGameSettings);
   }
+
+  const onInitial = (): void => { if (validateInitial()) applyGameSettings(); };
+  $("inpInitMin").addEventListener("change", onInitial);
+  $("inpInitMax").addEventListener("change", onInitial);
 
   // 阈值：滑块即时反馈
   const th = $<HTMLInputElement>("inpThreshold");
@@ -1206,6 +1275,46 @@ function bindIncompatibleModal(): void {
     }
     downloadRaw(raw, "incompatible-session");
     toast("已导出旧数据");
+  };
+
+  /**
+   * 强行加载：尽力抢救。
+   *
+   * 这是「责任在用户」的路径 —— 严格校验已经失败过一次，接下来能救回多少
+   * 取决于数据本身。应用负责如实报告抢救了什么、丢了什么，不替用户判断值不值。
+   */
+  $("bIncompatForce").onclick = () => {
+    const raw = rawSession();
+    if (!raw) {
+      toast("原始数据已不存在", true);
+      return;
+    }
+
+    const r = forceLoadSession(raw);
+    if (!r) {
+      toast("无法强行加载：数据里没有可用的棋盘", true);
+      return;
+    }
+
+    // 尺寸先对齐，否则还原出来的棋盘与当前设置不符
+    if (r.session.size !== SIZE) {
+      setBoardSize(r.session.size);
+      store.game.boardSize = r.session.size;
+      store.lastSize = r.session.size;
+      save(store);
+      syncGameUi();
+    }
+
+    applySession(r.session);
+    commitForced({ ...r.session, size: SIZE });
+    $("incompatModal").classList.remove("show");
+
+    setLed("on", `已强行加载 · 第 ${r.session.turn} 手`);
+    toast(
+      r.salvaged.length
+        ? `已强行加载。注意：${r.salvaged.join("；")}`
+        : `已强行加载上一局（第 ${r.session.turn} 手）`,
+    );
   };
 
   $("bIncompatReset").onclick = () => {
@@ -1484,20 +1593,61 @@ if (served) {
 }
 refreshBackend();
 
-setBoardSize(store.lastSize);
-renderer.animations = store.game.animations;
-renderer.particlesEnabled = store.game.particles;
-bindSwipe(canvas);
+/**
+ * 启动。
+ *
+ * 整体包在 try/catch 里是**刻意**的：模块求值阶段抛出的异常会静默中断后续所有初始化，
+ * 表现为「棋盘空白、点一下就判负」这种与根因毫不相干的症状。
+ * 真出问题时，至少要把它显式地报出来，而不是留一个空棋盘让玩家猜。
+ */
+function boot(): void {
+  // 先把所有必需的 id 一次性核对完，缺哪个直接说清楚
+  assertDom([
+    "board", "chart", "led", "status", "cost", "lat", "fb", "decision", "dTurn",
+    "sScore", "sBest", "sTurn", "sMax", "sBestMax", "pace", "paceVal",
+    "bToggle", "bStep", "bNew", "bArchive", "bGame", "bStrategy", "bApi", "bLog",
+    "scrim", "dArchive", "dGame", "dStrategy", "dApi", "dLog", "fileInput",
+    "incompatModal", "incompatReason", "incompatSize", "incompatPreview",
+    "bIncompatExport", "bIncompatForce", "bIncompatReset", "bIncompatLater",
+    "ruleDesc", "hintText", "inpCons", "inpSize", "inpSpawnMin", "inpSpawnMax",
+    "inpInitMin", "inpInitMax", "spawnWarn", "initWarn", "inpAnim", "inpParticles",
+    "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
+    "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
+    "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
+    "logList", "logCount", "bCopyAll", "bLogClear",
+  ]);
 
-bindGameSettings();
-bindContextSettings();
-syncGameUi();
-syncApiUi();
-syncPaceUi();
+  setBoardSize(store.lastSize);
+  renderer.animations = store.game.animations;
+  renderer.particlesEnabled = store.game.particles;
+  bindSwipe(canvas);
 
-fitBoard();
-// 优先还原上一局；没有可还原的存档才开新局
-if (!restoreSession()) newGame();
+  bindGameSettings();
+  bindContextSettings();
+  syncGameUi();
+  syncApiUi();
+  syncPaceUi();
+
+  fitBoard();
+  // 优先还原上一局；没有可还原的存档才开新局
+  if (!restoreSession()) newGame();
+}
+
+try {
+  boot();
+} catch (err) {
+  console.error("[Jev×2048] 启动失败：", err);
+  setLed("err", "启动失败");
+  const msg = err instanceof Error ? err.message : String(err);
+  // 用最朴素的方式报错 —— 此时弹框、抽屉这些依赖可能本身就不可用
+  const box = document.createElement("div");
+  box.style.cssText =
+    "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;" +
+    "background:#0a0a0a;z-index:9999;padding:24px;text-align:center;" +
+    "font:13px/1.7 ui-monospace,monospace;color:#f5b5b5;white-space:pre-wrap";
+  box.textContent = `启动失败\n\n${msg}\n\n请把这条信息报告给开发者。`;
+  document.body.appendChild(box);
+}
 for (const t of [60, 200, 500]) setTimeout(() => { fitBoard(); fitChart(); }, t);
 
 void DEFAULT_RETRY; // 保留默认值导出，供外部引用

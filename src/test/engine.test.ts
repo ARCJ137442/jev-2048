@@ -26,6 +26,7 @@ import {
   maxTile,
 } from "../client/engine.js";
 import { trajectoryCells } from "../client/metrics.js";
+import { MAX_INITIAL, clampInitial } from "../client/config.js";
 
 /* ══════════════ 工具 ══════════════ */
 
@@ -629,6 +630,70 @@ test("非 4×4 尺寸下四方向均正确", () => {
       ),
       `${n}×${n} down 失败`,
     );
+  }
+  setBoardSize(4);
+});
+
+/* ══════════════ 7. 初始瓷砖个数（棋盘不能开局为空）══════════════ */
+
+test("clampInitial：下限强制为 1，绝不允许 0", () => {
+  // 这是硬性规则约束：空棋盘上四个方向都动不了，第一步就会判负
+  assert.equal(clampInitial(0, 2), 1);
+  assert.equal(clampInitial(-5, 2), 1);
+  assert.equal(clampInitial(0.4, 2), 1);
+  assert.equal(clampInitial(1, 2), 1);
+});
+
+test("clampInitial：正常值原样保留", () => {
+  for (const v of [1, 2, 3, 8, 32]) assert.equal(clampInitial(v, 1), v);
+});
+
+test("clampInitial：非数字回落到默认值，且默认值本身也不小于 1", () => {
+  assert.equal(clampInitial("abc", 2), 2);
+  assert.equal(clampInitial(undefined, 2), 2);
+  assert.equal(clampInitial(NaN, 2), 2);
+  assert.ok(clampInitial(null, 0) >= 1, "即便传入的默认值是 0 也要抬到 1");
+});
+
+test("clampInitial：超过上限被截断", () => {
+  assert.equal(clampInitial(9999, 1), MAX_INITIAL);
+});
+
+test("初始瓷砖个数区间：任意合法配置下都至少放 1 个", () => {
+  // 复刻 placeInitialTiles 的取值逻辑
+  const pick = (lo: number, hi: number): number => {
+    const a = clampInitial(lo, 1);
+    const b = Math.max(a, clampInitial(hi, a));
+    return a + Math.floor(Math.random() * (b - a + 1));
+  };
+
+  const cases: Array<[unknown, unknown]> = [
+    [1, 2], [1, 1], [2, 2], [3, 5], [0, 0], [-1, -1],
+    [1, 100], ["2", "4"], [undefined, undefined],
+  ];
+  for (const [lo, hi] of cases) {
+    for (let i = 0; i < 200; i++) {
+      const n = pick(lo as number, hi as number);
+      assert.ok(n >= 1, `区间 [${lo}, ${hi}] 产生了 ${n} 个瓷砖`);
+      assert.ok(Number.isInteger(n));
+    }
+  }
+});
+
+test("初始瓷砖数量不会超过棋盘格子总数", () => {
+  for (const size of [3, 4, 8]) {
+    setBoardSize(size);
+    const cap = size * size;
+    const want = 999;                     // 请求一个荒谬的数量
+    let placed = 0;
+    const tiles: Tile[] = [];
+    for (let i = 0; i < Math.min(want, cap); i++) {
+      const t = spawnTile(tiles, 2, 2);
+      if (!t) break;
+      tiles.push(t);
+      placed++;
+    }
+    assert.ok(placed <= cap, `${size}×${size} 放了 ${placed} 个，超过容量 ${cap}`);
   }
   setBoardSize(4);
 });

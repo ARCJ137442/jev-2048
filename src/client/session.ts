@@ -187,6 +187,91 @@ export function maxTileId(tiles: Tile[]): number {
   return tiles.reduce((m, t) => (typeof t.id === "number" && t.id > m ? t.id : m), 0);
 }
 
+/**
+ * 强行加载：从读不懂的数据里**尽力**抢救出可用部分。
+ *
+ * 与 loadSession() 的区别是「谁承担风险」：
+ *   loadSession  严格校验，不合格就报不兼容，风险由应用承担
+ *   forceLoad    只做最低限度的检查，能救多少救多少，风险由用户承担
+ *
+ * 场景：用户从旧版本升级上来，存档结构变了。严格模式下整局作废，
+ * 但往往棋盘和分数这些核心字段结构没变 —— 强行加载能留住这部分。
+ *
+ * 只做必要检查：方块结构必须可用（否则没有可续玩的局面），
+ * 其余字段缺失就用默认值补齐。
+ */
+export function forceLoadSession(raw: string): { session: Session; salvaged: string[] } | null {
+  let o: unknown;
+  try {
+    o = JSON.parse(raw);
+  } catch {
+    return null;   // 连 JSON 都不是，无药可救
+  }
+  if (typeof o !== "object" || o === null || Array.isArray(o)) return null;
+
+  const r = o as Record<string, unknown>;
+  const salvaged: string[] = [];
+
+  // 方块：唯一不可缺的字段，但允许丢弃个别结构坏掉的
+  const rawTiles = Array.isArray(r.tiles) ? (r.tiles as unknown[]) : [];
+  const tiles = rawTiles.filter(
+    (t): t is Tile =>
+      typeof t === "object" &&
+      t !== null &&
+      typeof (t as Tile).id === "number" &&
+      typeof (t as Tile).value === "number" &&
+      typeof (t as Tile).row === "number" &&
+      typeof (t as Tile).col === "number",
+  );
+  if (tiles.length === 0) return null;         // 没有方块就没有可续玩的局面
+  if (tiles.length !== rawTiles.length) {
+    salvaged.push(`方块 ${rawTiles.length - tiles.length} 个损坏已丢弃`);
+  }
+
+  const num = (v: unknown, d: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+  };
+
+  const size = num(r.size, 4);
+  const score = num(r.score, 0);
+  const turn = num(r.turn, 0);
+
+  if (!Number.isFinite(Number(r.size))) salvaged.push("棋盘尺寸已用默认值 4");
+  if (!Number.isFinite(Number(r.score))) salvaged.push("分数已归零");
+  if (!Number.isFinite(Number(r.turn))) salvaged.push("轮次已归零");
+
+  const memory = Array.isArray(r.memory) ? (r.memory as MemoryEntry[]) : [];
+  const history = Array.isArray(r.history) ? (r.history as TurnLog[]) : [];
+  if (!Array.isArray(r.memory)) salvaged.push("记忆已清空");
+  if (!Array.isArray(r.history)) salvaged.push("调用日志已清空");
+
+  return {
+    session: {
+      v: SESSION_VERSION,
+      size,
+      tiles,
+      score,
+      turn,
+      memory,
+      history,
+      finished: false,
+      savedAt: "",
+    },
+    salvaged,
+  };
+}
+
+/** 把强行加载的结果写回存储，之后就能正常读写了 */
+export function commitForced(s: Session): void {
+  if (!canUseStorage()) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ ...s, savedAt: new Date().toISOString() }));
+  } catch {
+    /* 配额满就放弃，不影响本次会话 */
+  }
+}
+
 /** 直接读出原始字符串，用于「导出旧的不兼容数据」 */
 export function rawSession(): string | null {
   if (!canUseStorage()) return null;

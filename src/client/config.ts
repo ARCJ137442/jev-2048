@@ -14,6 +14,14 @@ export interface GameSettings {
   spawnMin: number;
   /** 上界（2 的幂次），null 表示不限 */
   spawnMax: number | null;
+  /**
+   * 开局时随机摆放的瓷砖个数区间。
+   *
+   * 下限**不能是 0** —— 空棋盘上任何方向都无法移动，第一步就会被判负。
+   * 这是标准 2048 的规则，也是曾真实出过的 bug。
+   */
+  initialMin: number;
+  initialMax: number;
   animations: boolean;
   /** 方向箭头粒子动效 */
   particles: boolean;
@@ -51,6 +59,8 @@ export const DEFAULT_GAME: GameSettings = {
   boardSize: 4,
   spawnMin: 2,
   spawnMax: 2,
+  initialMin: 1,
+  initialMax: 2,
   animations: true,
   particles: true,
   paceMs: 2000,
@@ -84,6 +94,21 @@ export function clampSpawn(v: unknown): number {
   const n = Math.round(Number(v));
   if (!Number.isFinite(n) || n < 1 || !isPowerOfTwo(n)) return 2;
   return n;
+}
+
+/** 初始瓷砖个数的上限护栏（棋盘再大也不该开局铺满） */
+export const MAX_INITIAL = 32;
+
+/**
+ * 初始瓷砖个数：下限**强制为 1**。
+ *
+ * 0 个瓷砖的棋盘上四个方向都无法移动，游戏会在第一步直接判负 ——
+ * 这不是可配置项，是规则约束。
+ */
+export function clampInitial(v: unknown, fallback: number): number {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_INITIAL, Math.max(1, n));
 }
 
 /** 置信度门槛归一到 [0, 1] */
@@ -143,6 +168,11 @@ export function load(): Persisted {
       spawnMin,
       // 上界不得小于下界
       spawnMax: rawMax === null ? null : Math.max(spawnMin, rawMax),
+      initialMin: clampInitial(g.initialMin, DEFAULT_GAME.initialMin),
+      initialMax: Math.max(
+        clampInitial(g.initialMin, DEFAULT_GAME.initialMin),
+        clampInitial(g.initialMax, DEFAULT_GAME.initialMax),
+      ),
       animations: g.animations ?? DEFAULT_GAME.animations,
       particles: g.particles ?? DEFAULT_GAME.particles,
       paceMs: Math.min(5000, Math.max(100, Number(g.paceMs) || DEFAULT_GAME.paceMs)),
