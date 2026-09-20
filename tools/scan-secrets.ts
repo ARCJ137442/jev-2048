@@ -39,8 +39,13 @@ const PATTERNS: Array<{ name: string; re: RegExp }> = [
  *
  * 测试 fixture 会用形如 `vck_TESTONLY_...` 的占位值 —— 它们长得像密钥，
  * 但明显是假的。白名单写在这里，而不是放宽正则 —— 放宽正则会同时放过真货。
+ *
+ * ⚠ 这些正则**不能带 `g` 标志**。
+ * 带 `g` 的正则在 `.test()` 时是有状态的：匹配成功后 lastIndex 停在末尾，
+ * 下一次调用会从那里继续找而失败。连续检查多个候选时白名单会时灵时不灵 ——
+ * 扫描工具自己踩过一次。
  */
-const ALLOWLIST = [/vck_TESTONLY/g, /vck_xxxxx/gi, /sk-or-v1-0{20,}/g];
+const ALLOWLIST = [/vck_TESTONLY/, /vck_xxxxx/i, /sk-or-v1-0{20,}/];
 
 interface Hit {
   where: string;

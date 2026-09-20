@@ -13,6 +13,16 @@ local/
 *.sealed
 openrouter-secret-api-key*
 
+# git 自身的目录 —— 绝不能被提交
+# 真实教训：.git.backup 曾不在忽略列表里，一次 git add -A 把整个旧 .git
+# 提交了进去。里面的对象是 zlib 压缩的，明文正则扫描**抓不到**，
+# 但任何人解压就能还原出密钥。
+.git/
+.git.backup/
+.git*/
+*.pack
+*.idx
+
 # 编辑器 / 系统
 .DS_Store
 .vscode/
