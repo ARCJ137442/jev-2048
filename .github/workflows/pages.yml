@@ -48,13 +48,9 @@ jobs:
         # 只编译客户端 —— Pages 上没有服务端，dist/ 用不到
         run: node node_modules/typescript/bin/tsc -p tsconfig.client.json
 
-      - name: 确认产物里不含密钥
-        run: |
-          if grep -rIl -E 'vck_[A-Za-z0-9]{20,}|sk-or-v1-[a-f0-9]{30,}' public/; then
-            echo "::error::静态产物里出现了疑似真实密钥，拒绝发布"
-            exit 1
-          fi
-          echo "✓ 静态产物干净"
+      - name: 扫描静态产物里的密钥
+        # 同样不用 grep -I（会跳过二进制）
+        run: node tools/scan-secrets.ts
 
       - name: 准备 Pages 产物
         run: |

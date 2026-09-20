@@ -46,11 +46,9 @@ jobs:
           node node_modules/typescript/bin/tsc -p tsconfig.client.json
           node node_modules/typescript/bin/tsc -p tsconfig.server.json
 
-      - name: 确认产物里不含密钥
-        # 真密钥不该出现；这里再兜一道，防止将来有人把 key 写进源码
-        run: |
-          if grep -rIl --exclude-dir=node_modules --exclude-dir=.git -E 'vck_[A-Za-z0-9]{20,}|sk-or-v1-[a-f0-9]{30,}' .; then
-            echo "::error::仓库中出现了疑似真实密钥，请立即移除并轮换"
-            exit 1
-          fi
-          echo "✓ 未发现明文密钥"
+      - name: 扫描工作区与 git 历史里的密钥
+        # ⚠ 不能用 grep -I —— 那个 -I 会跳过二进制文件。
+        # 真实案例：某个文件混进裸控制字节后被判为二进制，
+        # 里面的真实密钥恰好从扫描里溜了过去。tools/scan-secrets.ts 按字节读，
+        # 不做任何文本/二进制假设，并同时检查 git 历史。
+        run: node tools/scan-secrets.ts --history

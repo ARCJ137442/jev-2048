@@ -18,6 +18,9 @@ if [ ! -f "$TSC" ]; then
   exit 1
 fi
 
+echo "▸ 扫描密钥…"
+node tools/scan-secrets.ts || { echo "✗ 发现明文密钥，已中止启动"; exit 1; }
+
 echo "▸ 检查 DOM id 一致性…"
 node tools/check-dom.ts || { echo "✗ HTML 与 TS 不同步，已中止启动"; exit 1; }
 
