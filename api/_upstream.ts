@@ -91,7 +91,8 @@ export function makeHandler(up: Upstream) {
     }
 
     if (req.method === "GET") {
-      // 健康检查：只回显「配没配」「脱敏形态」，绝不返回密钥本身
+      // 健康检查：只回显「配没配」与脱敏形态。
+      // 不回上游名称 —— 部署冒烟测试只需要知道这个后端能不能用。
       const key = process.env[up.envKey] ?? "";
       res.status(200).json({
         ok: Boolean(key),
@@ -108,9 +109,15 @@ export function makeHandler(up: Upstream) {
 
     const key = process.env[up.envKey];
     if (!key) {
+      // ⚠ 面向用户的错误**只说他能做什么**。
+      // 实现细节（是哪个上游、缺哪个环境变量）只进服务端日志 ——
+      // 写进响应体等于把「免费试用背后是某某提供商」直接告诉用户，
+      // 而界面上那些隐藏（禁用模型字段、藏 Base URL）就白做了。
+      // 错误信息恰恰是用户最会仔细读的地方。
+      console.error(`[${up.label}] 未配置：缺少环境变量 ${up.envKey}`);
       res.status(503).json({
         error: {
-          message: `${up.label} 未配置：服务端缺少 ${up.envKey} 环境变量。请在 Vercel 项目设置里添加，或改用其他后端。`,
+          message: "该免费后端暂时不可用。请稍后重试，或在「API」设置里改用其他后端或自备密钥。",
         },
       });
       return;

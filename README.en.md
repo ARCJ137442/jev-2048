@@ -14,7 +14,7 @@
 
 Try it:
 
-[![Online Demo](https://img.shields.io/badge/Online%20Demo-Vercel-78dce8?style=for-the-badge)](https://jev-2048.vercel.app)
+[![Online Demo](https://img.shields.io/badge/Online%20Demo-Vercel-78dce8?style=for-the-badge)](https://jev-2048-ultra.vercel.app)
 
 <!-- For developers -->
 
@@ -38,7 +38,7 @@ This project hands every move to Jev and lays its probability distribution, conf
 
 ## Online Demo
 
-<https://jev-2048.vercel.app>
+<https://jev-2048-ultra.vercel.app>
 
 A "Free Trial" backend is built in — no API key required. Quota is limited; when it runs out the app prompts you to switch to your own key. See "Getting Started" below to run it locally instead.
 

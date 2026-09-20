@@ -30,7 +30,7 @@ import type {
  * **这不是把密钥搬进静态文件**：静态页面只发请求，密钥仍在 Vercel 的函数进程里。
  * 部署到自己的域名后，把这个常量改成你的地址即可。
  */
-export const REMOTE_PROXY_BASE = "https://jev-2048.vercel.app";
+export const REMOTE_PROXY_BASE = "https://jev-2048-ultra.vercel.app";
 
 /**
  * 当前是否跑在「没有同源服务端」的环境里。

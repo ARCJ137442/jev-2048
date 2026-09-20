@@ -206,9 +206,12 @@ async function handleEvaluate(
 ): Promise<void> {
   const cred = KEYS.get(up.route);
   if (!cred) {
+    // 同 api/_upstream.ts：面向用户的错误不暴露上游与环境变量名，
+    // 细节只写本地日志（本机运行时用户就是管理员，看日志即可）。
+    log(`✗ [${up.label}] 未配置：缺 ${up.envKey} 或本地密钥文件`);
     sendJson(res, 503, {
       error: {
-        message: `${up.label} 未配置密钥：服务端缺少 ${up.envKey} 环境变量或本地密钥文件。请改用其他后端。`,
+        message: "该免费后端暂时不可用。请稍后重试，或在「API」设置里改用其他后端或自备密钥。",
       },
     });
     return;

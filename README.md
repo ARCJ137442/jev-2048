@@ -14,7 +14,7 @@
 
 试玩：
 
-[![Online Demo](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-Vercel-78dce8?style=for-the-badge)](https://jev-2048.vercel.app)
+[![Online Demo](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E8%AF%95%E7%8E%A9-Vercel-78dce8?style=for-the-badge)](https://jev-2048-ultra.vercel.app)
 
 <!-- 面向开发者 -->
 
@@ -40,7 +40,7 @@ Jev 不生成文本。它接收一段「状态」与一组带类型的「问题�
 
 | 部署方式 | 地址 | 说明 |
 |---|---|---|
-| Vercel | <https://jev-2048.vercel.app> | 自带服务端函数，「免费试用」同源可用 |
+| Vercel | <https://jev-2048-ultra.vercel.app> | 自带服务端函数，「免费试用」同源可用 |
 | GitHub Pages | <https://arcj137442.github.io/jev-2048/> | 纯静态，跨域调用上面那份的免费试用端点 |
 
 两种部署都内置「免费试用」后端，无需配置密钥即可试玩。
