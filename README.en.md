@@ -225,6 +225,39 @@ The right approach is to **implement the SystemOne protocol on the local side**,
 
 Fully offline Jev is not possible — the official weights are not open.
 
+### Offline alternative: Laya
+
+[Laya](https://github.com/NandhaKishorM/laya) (Apache-2.0) is an **open-source alternative** to Jev —
+also a non-autoregressive decision model that answers every question in a single forward pass and
+generates no text. It ships as a Python package with no HTTP server, so you need a thin sidecar
+that implements SystemOne.
+
+```plaintext
+POST /v1/systemone   request  { state, model, questions }
+                     optional per-request head_max_len / max_len
+                     response { model, answers, usage, routing }
+GET  /v1/models      checkpoints this server can route to
+GET  /healthz        health check
+```
+
+- Defaults to `http://127.0.0.1:8137`; `--host` / `--port` are configurable
+- **No auth by default**; `--api-key <k>` enables `Authorization: Bearer <k>`
+- `model` values: `router` (default, language routing) / `english` / `multilingual` / `typed-decisions`
+- The response `model` looks like `laya-typed-decisions` and carries an extra `routing` field
+
+#### Differences from Jev ⚠️
+
+| | |
+|---|---|
+| **Much smaller context** | english=512, multilingual and typed-decisions=1024 tokens; overflow is truncated from the tail |
+| **Choice options share a budget** | Option labels share `head_max_len` (512 by default); too many options returns 400 naming the offending question |
+| **Confidence is on a different scale** | Thresholds calibrated for Jev **do not transfer**; recalibrate |
+| **Type discriminator is `noul`** | Not Vercel's `boolean` |
+| **Zero cost** | No key, no per-token billing, no network |
+
+> 📌 The "Local Laya server" backend in this project is reserved for it (default `127.0.0.1:8137`).
+> Marked experimental: the adapter is not open-sourced with this repository yet; treat the table above as the spec.
+
 ### Potential applications
 
 The value here is not "a model plays 2048" but a **reproducible context bench**:
