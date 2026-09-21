@@ -691,7 +691,7 @@ test("非 4×4 尺寸下四方向均正确", () => {
   setBoardSize(4, 4);
 });
 
-/* ══════════════ 7. 初始瓷砖个数（棋盘不能开局为空）══════════════ */
+/* ══════════════ 7. 初始方块个数（棋盘不能开局为空）══════════════ */
 
 test("clampInitial：下限强制为 1，绝不允许 0", () => {
   // 这是硬性规则约束：空棋盘上四个方向都动不了，第一步就会判负
@@ -716,7 +716,7 @@ test("clampInitial：超过上限被截断", () => {
   assert.equal(clampInitial(9999, 1), MAX_INITIAL);
 });
 
-test("初始瓷砖个数区间：任意合法配置下都至少放 1 个", () => {
+test("初始方块个数区间：任意合法配置下都至少放 1 个", () => {
   // 复刻 placeInitialTiles 的取值逻辑
   const pick = (lo: number, hi: number): number => {
     const a = clampInitial(lo, 1);
@@ -731,13 +731,13 @@ test("初始瓷砖个数区间：任意合法配置下都至少放 1 个", () =>
   for (const [lo, hi] of cases) {
     for (let i = 0; i < 200; i++) {
       const n = pick(lo as number, hi as number);
-      assert.ok(n >= 1, `区间 [${lo}, ${hi}] 产生了 ${n} 个瓷砖`);
+      assert.ok(n >= 1, `区间 [${lo}, ${hi}] 产生了 ${n} 个方块`);
       assert.ok(Number.isInteger(n));
     }
   }
 });
 
-test("初始瓷砖数量不会超过棋盘格子总数", () => {
+test("初始方块数量不会超过棋盘格子总数", () => {
   for (const size of [3, 4, 8]) {
     setBoardSize(size, size);
     const cap = size * size;

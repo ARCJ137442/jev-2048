@@ -160,7 +160,7 @@ export class BoardRenderer {
    *
    * ⚠ 这个常数不能凭感觉改。旧版写的是 `pad = 画布边长 × 0.028`、`gap = pad × 0.62`，
    * 而这里的基准是**格子**。直接照搬那两个数字（曾真实发生过）会让 gap 变成
-   * pad 的 20 倍，瓷砖被挤成细条。0.0905 是从旧版 4×4 的视觉密度反推的：
+   * pad 的 20 倍，方块被挤成细条。0.0905 是从旧版 4×4 的视觉密度反推的：
    * 原 pad 占格子 12.56%，取其中间偏内的值，保证格子本身不缩水太多。
    *
    * @returns 是否发生了实际变化
@@ -307,7 +307,7 @@ export class BoardRenderer {
    *
    * @param dir    本手的移动方向，粒子沿它飘散
    * @param cells  本手发生变化的格子（行、列）。只在这些位置生成，
-   *               未参与的格子保持干净 —— 粒子因此读起来像「瓷砖划过的轨迹」。
+   *               未参与的格子保持干净 —— 粒子因此读起来像「方块划过的轨迹」。
    */
   burst(dir: Direction, cells: Array<{ row: number; col: number }>): void {
     if (!this.animations || !this.particlesEnabled || this.cssW <= 0) return;

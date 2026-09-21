@@ -160,6 +160,9 @@ footer .spacer{flex:1}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* 区间类配置：两个输入框之间放一个分隔符，让「从…到…」的关系一眼可见 */
 .range2{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.formula{display:flex;align-items:center;gap:5px;font:12px var(--mono);color:var(--ink-3);min-width:0}
+.formula input{flex:1 1 auto;width:100%;min-width:0;text-align:center}
+.formula .eq{color:var(--accent);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
 .range2 .sep{font:600 13px var(--mono);color:var(--ink-4);user-select:none;text-align:center;min-width:14px}
 .slider-row{display:flex;align-items:center;gap:10px}
 .slider-row .val{font:600 12px var(--mono);color:var(--accent);min-width:46px;text-align:right}
@@ -475,6 +478,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 <footer>
   <span><span class="led" id="led"></span><span id="status" data-i18n="stats.ready">就绪</span></span>
   <span><span data-i18n="stats.total">累计</span> <b id="cost">$0</b></span>
+  <span title="每次成功调用的平均费用" data-i18n-title="stats.avgCostTitle"><span data-i18n="stats.avgCost">均次</span> <b id="avgCost">—</b></span>
   <span><span data-i18n="stats.latency">延迟</span> <b id="lat">—</b></span>
   <span class="spacer"></span>
   <span id="backend">—</span>
@@ -568,7 +572,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   <div class="body">
     <div class="field">
       <label data-i18n="archive.game">游戏（对局）</label>
-      <div class="desc" data-i18n="archive.gameDesc">当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大瓷砖。</div>
+      <div class="desc" data-i18n="archive.gameDesc">当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大方块。</div>
       <div class="row2">
         <button id="bExpGame" data-i18n="archive.export">导出</button>
         <button id="bImpGame" data-i18n="archive.import">导入</button>
@@ -647,11 +651,10 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <label data-i18n="game.spawnRange">新方块取值区间（填 2 的指数）</label>
       <div class="desc" data-i18n="game.spawnHint">填指数 n，实际取值是 2ⁿ —— 0 → 1、1 → 2、2 → 4，以此类推。</div>
       <div class="range2">
-        <input type="number" id="inpSpawnMin" min="0" step="1" placeholder="最小 0" data-i18n-ph="game.phSpawnMin">
+        <span class="formula">2^<input type="number" id="inpSpawnMin" min="0" step="1"><span class="eq" id="spawnMinVal">= 1</span></span>
         <span class="sep">~</span>
-        <input type="number" id="inpSpawnMax" min="0" step="1" placeholder="最大 2" data-i18n-ph="game.phSpawnMax">
+        <span class="formula">2^<input type="number" id="inpSpawnMax" min="0" step="1"><span class="eq" id="spawnMaxVal">= 4</span></span>
       </div>
-      <div class="tinylbl" id="spawnPreview"></div>
       <div class="warnline" id="spawnWarn" data-i18n="game.spawnWarn">指数需为非负整数，且上界不小于下界</div>
     </div>
 
@@ -667,9 +670,9 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
 
     <div class="field">
-      <label data-i18n="game.initRange">初始瓷砖个数区间</label>
+      <label data-i18n="game.initRange">初始方块个数区间</label>
       <div class="desc" data-i18n="game.initDesc">
-        开局时随机摆放几个瓷砖。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。
+        开局时随机摆放几个方块。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。
       </div>
       <div class="range2">
         <input type="number" id="inpInitMin" min="1" step="1" placeholder="最小 1" data-i18n-ph="game.phMin1">
@@ -693,7 +696,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   </div>
   <footer>
     <button id="bGameReset" class="ghost" title="棋盘尺寸、新方块区间、动效回到出厂值" data-i18n-title="game.resetTitle" data-i18n="game.reset">恢复默认</button>
-    <button id="bScoreReset" class="ghost" title="清空各棋盘尺寸的历史最高分与最大瓷砖" data-i18n-title="game.scoreResetTitle" data-i18n="game.scoreReset">重置最高分</button>
+    <button id="bScoreReset" class="ghost" title="清空各棋盘尺寸的历史最高分与最大方块" data-i18n-title="game.scoreResetTitle" data-i18n="game.scoreReset">重置最高分</button>
     <span style="flex:1"></span>
     <button id="bGameDone" class="primary" data-i18n="archive.done">完成</button>
   </footer>

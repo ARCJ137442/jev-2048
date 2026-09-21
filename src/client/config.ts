@@ -29,7 +29,7 @@ export interface GameSettings {
   /** 生成值的分布：等概率，或权重为值的倒数（越大的越罕见） */
   spawnDist: SpawnDist;
   /**
-   * 开局时随机摆放的瓷砖个数区间。
+   * 开局时随机摆放的方块个数区间。
    *
    * 下限**不能是 0** —— 空棋盘上任何方向都无法移动，第一步就会被判负。
    * 这是标准 2048 的规则，也是曾真实出过的 bug。
@@ -70,7 +70,7 @@ export interface Persisted {
   lang: Lang;
   /** 各棋盘尺寸下的历史最高分 */
   highScores: Record<string, number>;
-  /** 各棋盘尺寸下达成过的最大瓷砖值 */
+  /** 各棋盘尺寸下达成过的最大方块值 */
   bestTiles: Record<string, number>;
   /** 上一局用的棋盘尺寸，便于启动时恢复 */
   lastWidth: number;
@@ -173,13 +173,13 @@ export function dimKey(cols: number, rows: number): string {
   return `${cols}x${rows}`;
 }
 
-/** 初始瓷砖个数的上限护栏（棋盘再大也不该开局铺满） */
+/** 初始方块个数的上限护栏（棋盘再大也不该开局铺满） */
 export const MAX_INITIAL = 32;
 
 /**
- * 初始瓷砖个数：下限**强制为 1**。
+ * 初始方块个数：下限**强制为 1**。
  *
- * 0 个瓷砖的棋盘上四个方向都无法移动，游戏会在第一步直接判负 ——
+ * 0 个方块的棋盘上四个方向都无法移动，游戏会在第一步直接判负 ——
  * 这不是可配置项，是规则约束。
  */
 export function clampInitial(v: unknown, fallback: number): number {
@@ -343,7 +343,7 @@ export function bestTileFor(p: Persisted, cols: number, rows: number): number {
   return Number(p.bestTiles[dimKey(cols, rows)] ?? 0) || 0;
 }
 
-/** 返回是否刷新了最大瓷砖纪录 */
+/** 返回是否刷新了最大方块纪录 */
 export function recordTile(p: Persisted, cols: number, rows: number, tile: number): boolean {
   const cur = bestTileFor(p, cols, rows);
   if (tile > cur) {

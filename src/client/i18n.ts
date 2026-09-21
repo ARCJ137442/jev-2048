@@ -88,6 +88,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chart.waiting": "等待对局数据",
     "stats.ready": "就绪",
     "stats.total": "累计",
+    "stats.avgCost": "均次",
+    "stats.avgCostTitle": "每次成功调用的平均费用 —— 失败的调用不计入",
     "stats.latency": "延迟",
 
     /* ---------- 游戏面板 ---------- */
@@ -107,8 +109,8 @@ const DICT: Record<Lang, Record<string, string>> = {
     "game.distWeighted": "加权 — 权重为值的倒数，越大越罕见（默认）",
     "game.distUniform": "均匀 — 区间内各值等概率",
     "game.distNote": "加权模式下 2 与 4 的出现比约为 2 : 1（P(2)=2/3）；均匀模式各占一半。",
-    "game.initRange": "初始瓷砖个数区间",
-    "game.initDesc": "开局时随机摆放几个瓷砖。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。",
+    "game.initRange": "初始方块个数区间",
+    "game.initDesc": "开局时随机摆放几个方块。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。",
     "game.phMin1": "最小 1",
     "game.phMax2": "最大 2",
     "game.initWarn": "下限至少为 1，且不得大于上限",
@@ -118,7 +120,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "game.reset": "恢复默认",
     "game.resetTitle": "棋盘尺寸、新方块区间、动效回到出厂值",
     "game.scoreReset": "重置最高分",
-    "game.scoreResetTitle": "清空各棋盘尺寸的历史最高分与最大瓷砖",
+    "game.scoreResetTitle": "清空各棋盘尺寸的历史最高分与最大方块",
     "game.done": "完成",
 
     /* ---------- 策略面板 ---------- */
@@ -197,7 +199,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "archive.title": "存档",
     "archive.desc": "四类内容各自独立成档，可分别备份与恢复。导出的是 JSON 文件，导入时逐项校验。",
     "archive.game": "游戏（对局）",
-    "archive.gameDesc": "当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大瓷砖。",
+    "archive.gameDesc": "当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大方块。",
     "archive.strategy": "策略",
     "archive.strategyDesc": "上下文（规则说明、策略提示、后果预测、记忆轮数）与规则（决策策略、置信度门槛）。",
     "archive.apiDesc": "自动重试参数。",
@@ -304,7 +306,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     /* ---------- 覆盖层 / 游戏结束 ---------- */
     "over.gameOver": "游戏结束",
     "over.stats": "得分 {score}　最大方块 {max}　共 {turn} 回合",
-    "over.best": "历史最高分 {best}　历史最大瓷砖 {bt}",
+    "over.best": "历史最高分 {best}　历史最大方块 {bt}",
     "over.again": "再来一局",
     "over.retry": "重试",
     "over.skip": "跳过这一手",
@@ -328,7 +330,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "field.context": "上下文",
     "field.apiSettings": "API 设置",
     "field.highScores": "历史最高分",
-    "field.bestTiles": "历史最大瓷砖",
+    "field.bestTiles": "历史最大方块",
     "field.gameAtTurn": "对局（第 {n} 手）",
     "kind.game": "对局",
     "kind.strategy": "策略",
@@ -344,7 +346,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "confirm.strategyReset":
       "恢复策略的默认设置？\n（上下文文本、后果预测、记忆、决策策略、阈值都会回到出厂值）",
     "confirm.scoreReset":
-      "重置所有历史最高分与最大瓷砖？\n（各棋盘尺寸的纪录都会被清空，当前对局不受影响）",
+      "重置所有历史最高分与最大方块？\n（各棋盘尺寸的纪录都会被清空，当前对局不受影响）",
     "confirm.apiReset":
       "恢复 API 的默认设置？\n（自动重试参数回到出厂值；后端与密钥不受影响）",
     "confirm.logClear": "清空全部调用日志？此操作不可撤销。",
@@ -417,7 +419,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "dir.right": "右",
 
     /* ---------- 开发者控制台 ---------- */
-    "dev.spawnFail": "[Jev×2048] 初始瓷砖放置失败，已兜底放置一个",
+    "dev.spawnFail": "[Jev×2048] 初始方块放置失败，已兜底放置一个",
     "dev.bootFail": "[Jev×2048] 启动失败：",
     "dev.bootInfo": "[Jev×2048] 棋盘 {cols}×{rows}　生成 {min}–{max} ({dist})　记忆 {mem}　阈值 {th}",
     "dev.memMax": "最大",
@@ -469,17 +471,19 @@ const DICT: Record<Lang, Record<string, string>> = {
     "chart.waiting": "Waiting for game data",
     "stats.ready": "Ready",
     "stats.total": "Total",
+    "stats.avgCost": "Avg",
+    "stats.avgCostTitle": "Average cost per successful call — failed calls are not counted",
     "stats.latency": "Latency",
 
     /* ---------- Game panel ---------- */
     "game.title": "Game",
     "game.desc":
-      "Natural properties of the board and new tiles. Nothing here affects what Jev sees, or how it decides.",
+      "Natural properties of the board and new blocks. Nothing here affects what Jev sees, or how it decides.",
     "game.boardSize": "Board size (width × height, independent)",
     "game.boardHint": "2 – 16. Changing this immediately starts a new game; records are kept per width×height.",
     "game.phWidth": "W 4",
     "game.phHeight": "H 4",
-    "game.spawnRange": "New tile value range (exponent of 2)",
+    "game.spawnRange": "New block value range (exponent of 2)",
     "game.spawnHint": "Enter the exponent n; the actual value is 2ⁿ — 0 → 1, 1 → 2, 2 → 4, and so on.",
     "game.phSpawnMin": "min 0",
     "game.phSpawnMax": "max 2",
@@ -488,9 +492,9 @@ const DICT: Record<Lang, Record<string, string>> = {
     "game.distWeighted": "Weighted — weight is the inverse of the value, so larger values are rarer (default)",
     "game.distUniform": "Uniform — every value in the range is equally likely",
     "game.distNote": "Weighted makes 2 about twice as likely as 4 (P(2)=2/3); uniform splits them evenly.",
-    "game.initRange": "Initial tile count range",
+    "game.initRange": "Initial block count range",
     "game.initDesc":
-      "How many tiles are placed at the start. The lower bound cannot be less than 1 — on an empty board no direction can move, so the first move would end the game immediately.",
+      "How many blocks are placed at the start. The lower bound cannot be less than 1 — on an empty board no direction can move, so the first move would end the game immediately.",
     "game.phMin1": "min 1",
     "game.phMax2": "max 2",
     "game.initWarn": "The lower bound must be at least 1 and no greater than the upper bound",
@@ -500,7 +504,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "game.reset": "Restore defaults",
     "game.resetTitle": "Reset board size, spawn range and effects to factory values",
     "game.scoreReset": "Reset records",
-    "game.scoreResetTitle": "Clear the best score and best tile for every board size",
+    "game.scoreResetTitle": "Clear the best score and best block for every board size",
     "game.done": "Done",
 
     /* ---------- Strategy panel ---------- */
@@ -516,7 +520,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "strategy.hintLabel": "Strategy hint → state.strategy_hint",
     "strategy.criteriaLabel": "Consequence forecast → questions.criteria",
     "strategy.criteriaOn": "Include each move's concrete consequences",
-    "strategy.criteriaDesc": "When on, every candidate direction carries its merge score, the remaining empty cells, and whether the largest tile ends up in a corner. Turn it off and Jev sees only the direction names.",
+    "strategy.criteriaDesc": "When on, every candidate direction carries its merge score, the remaining empty cells, and whether the largest block ends up in a corner. Turn it off and Jev sees only the direction names.",
     "strategy.memoryLabel": "Memory turns → state.recent_history",
     "strategy.max": "Max",
     "strategy.maxTitle": "Fill as much as the context budget allows",
@@ -580,7 +584,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "archive.desc":
       "Four independent archives, each backed up and restored separately. Exports are JSON files, and imports are validated item by item.",
     "archive.game": "Game (session)",
-    "archive.gameDesc": "Current board, score, turn, memory, plus board size, best score and best tile.",
+    "archive.gameDesc": "Current board, score, turn, memory, plus board size, best score and best block.",
     "archive.strategy": "Strategy",
     "archive.strategyDesc":
       "Context (rule description, strategy hint, consequence forecast, memory turns) and rules (decision policy, confidence threshold).",
@@ -688,8 +692,8 @@ const DICT: Record<Lang, Record<string, string>> = {
 
     /* ---------- Overlay / game over ---------- */
     "over.gameOver": "Game over",
-    "over.stats": "Score {score}　Best tile {max}　{turn} turns",
-    "over.best": "Best score {best}　Best tile ever {bt}",
+    "over.stats": "Score {score}　Best block {max}　{turn} turns",
+    "over.best": "Best score {best}　Best block ever {bt}",
     "over.again": "Play again",
     "over.retry": "Retry",
     "over.skip": "Skip this move",
@@ -713,7 +717,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "field.context": "Context",
     "field.apiSettings": "API settings",
     "field.highScores": "Best scores",
-    "field.bestTiles": "Best tiles",
+    "field.bestTiles": "Best blocks",
     "field.gameAtTurn": "Session (move {n})",
     "kind.game": "session",
     "kind.strategy": "strategy",
@@ -729,7 +733,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "confirm.strategyReset":
       "Restore the strategy defaults?\n(Context text, consequence forecast, memory, decision policy and threshold all return to factory values)",
     "confirm.scoreReset":
-      "Reset all best scores and best tiles?\n(Records for every board size are cleared; the current game is unaffected)",
+      "Reset all best scores and best blocks?\n(Records for every board size are cleared; the current game is unaffected)",
     "confirm.apiReset":
       "Restore the API defaults?\n(Retry settings return to factory values; backend and key are untouched)",
     "confirm.logClear": "Clear the entire call log? This cannot be undone.",
@@ -765,11 +769,11 @@ const DICT: Record<Lang, Record<string, string>> = {
     "sesserr.badJson": "Saved data is not valid JSON (possibly corrupted)",
     "sesserr.versionHigh": "Saved data version v{v} is newer than the supported v{cur}",
     "sesserr.noSize": "Saved data is missing board dimensions",
-    "sesserr.badTiles": "The saved tile list is corrupted",
+    "sesserr.badTiles": "The saved block list is corrupted",
     "sesserr.noScore": "Saved data is missing the score",
     "sesserr.noTurn": "Saved data is missing the turn count",
-    "sesserr.badTile": "Saved data contains structurally incomplete tiles",
-    "salv.tilesDropped": "{n} corrupted tile(s) dropped",
+    "sesserr.badTile": "Saved data contains structurally incomplete blocks",
+    "salv.tilesDropped": "{n} corrupted block(s) dropped",
     "salv.size": "Board dimensions fell back to the default 4×4",
     "salv.score": "Score reset to zero",
     "salv.turn": "Turn count reset to zero",
@@ -802,7 +806,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "dir.right": "Right",
 
     /* ---------- Developer console ---------- */
-    "dev.spawnFail": "[Jev×2048] Initial tile placement failed; fell back to placing one",
+    "dev.spawnFail": "[Jev×2048] Initial block placement failed; fell back to placing one",
     "dev.bootFail": "[Jev×2048] Startup failed:",
     "dev.bootInfo": "[Jev×2048] board {cols}×{rows}　spawn {min}–{max} ({dist})　memory {mem}　threshold {th}",
     "dev.memMax": "max",

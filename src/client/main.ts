@@ -170,7 +170,7 @@ interface AppState {
   cfg: ClientConfig;
   /** 当前棋盘尺寸下的历史最高分 */
   best: number;
-  /** 当前棋盘尺寸下达成过的最大瓷砖值 */
+  /** 当前棋盘尺寸下达成过的最大方块值 */
   bestTile: number;
   /** 每回合的历史（含完整请求/响应，供日志面板） */
   history: TurnLog[];
@@ -222,6 +222,18 @@ function retryPolicy(): RetryPolicy {
   return { max: store.api.retryMax, baseMs: store.api.retryBaseMs };
 }
 
+/**
+ * 累计费用与均次费用。
+ *
+ * 两处数据同源（`costTotal` 与已成功调用次数），放在一起更新，
+ * 免得某一处漏改导致两个数字对不上。失败的调用不产生费用，也不计入分母。
+ */
+function updateCostUi(): void {
+  $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
+  const ok = state.history.filter((h) => !h.failed).length;
+  $("avgCost").textContent = ok > 0 ? `$${(state.costTotal / ok).toFixed(4)}` : "—";
+}
+
 function updateStats(): void {
   $("sScore").textContent = String(state.score);
   $("sBest").textContent = String(state.best);
@@ -231,7 +243,7 @@ function updateStats(): void {
 }
 
 /**
- * 记分与最大瓷砖。分数是「一局内累积」，最大瓷砖是「历史达成过的最高值」，
+ * 记分与最大方块。分数是「一局内累积」，最大方块是「历史达成过的最高值」，
  * 两者都按棋盘尺寸分开存 —— 8×8 的纪录和 4×4 没有可比性。
  */
 function recordProgress(): void {
@@ -670,13 +682,13 @@ async function doTurn(): Promise<void> {
   state.memory.push({ turn: state.turn, board: beforeGrid, move, score: state.score });
   renderer.sync(state.tiles, res.dying);
 
-  // ★ 方向粒子动效：只在本手瓷砖划过的轨迹上生成
+  // ★ 方向粒子动效：只在本手方块划过的轨迹上生成
   if (answer) renderer.burst(move, trajectoryCells(beforeTiles, state.tiles, res.dying));
   recordProgress();
 
   if (answer) {
     state.costTotal += estimateCost(tokens);
-    $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
+    updateCostUi();
     $("lat").textContent = `${latency.toFixed(0)}ms`;
     renderDecision(answer, move, latency, tokens, noteKey, coerced, noteParams);
   } else {
@@ -760,7 +772,7 @@ function applySession(s: Session): void {
   renderLog();
 
   state.costTotal = state.history.reduce((sum, r) => sum + estimateCost(r.tokens), 0);
-  $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
+  updateCostUi();
   const last = state.history[state.history.length - 1];
   $("lat").textContent = last ? `${last.latencyMs}ms` : "—";
   renderDecisionIdle("decision.restored", { n: state.turn });
@@ -856,7 +868,7 @@ function newGame(): void {
     finished: false,
   });
 
-  $("cost").textContent = "$0";
+  updateCostUi();
   $("lat").textContent = "—";
   renderDecisionIdle("decision.idle");
   $("dTurn").textContent = "";
@@ -868,7 +880,7 @@ function newGame(): void {
 }
 
 /**
- * 开局摆放瓷砖。
+ * 开局摆放方块。
  *
  * 个数从配置区间里随机取，下限由 clampInitial 强制为 1 ——
  * 空棋盘上四个方向都动不了，第一步就会判负。
@@ -1173,17 +1185,17 @@ function validateSpawn(): boolean {
  * 填指数则天然保证合法，代价就是得把这行换算结果摆在眼前。
  */
 function updateSpawnPreview(): void {
-  const fmt = (raw: string): string => {
+  // 算式本身（`2^`）写在 HTML 里，这里只补右侧的换算结果
+  const eq = (raw: string): string => {
     const e = Number(raw);
-    if (!Number.isInteger(e) || e < 0 || e > MAX_SPAWN_EXP) return "—";
-    return `2^${e} = ${spawnValueOf(e)}`;
+    if (!Number.isInteger(e) || e < 0 || e > MAX_SPAWN_EXP) return "= —";
+    return `= ${spawnValueOf(e)}`;
   };
-  $("spawnPreview").textContent =
-    `${fmt($<HTMLInputElement>("inpSpawnMin").value)} ~ ` +
-    `${fmt($<HTMLInputElement>("inpSpawnMax").value)}`;
+  $("spawnMinVal").textContent = eq($<HTMLInputElement>("inpSpawnMin").value);
+  $("spawnMaxVal").textContent = eq($<HTMLInputElement>("inpSpawnMax").value);
 }
 
-/** 初始瓷砖个数：下限必须是 ≥1 的整数，且不得大于上限 */
+/** 初始方块个数：下限必须是 ≥1 的整数，且不得大于上限 */
 function validateInitial(): boolean {
   const lo = Number($<HTMLInputElement>("inpInitMin").value);
   const hi = Number($<HTMLInputElement>("inpInitMax").value);
@@ -1988,10 +2000,10 @@ function boot(): void {
     "bGameReset", "bScoreReset", "bStrategyReset", "bApiReset", "bArchiveWipe", "bLogClear", "bCopyAll",
     "ruleDesc", "hintText", "inpCons",
     "inpWidth", "inpHeight", "inpSpawnMin", "inpSpawnMax", "inpDist",
-    "inpInitMin", "inpInitMax", "spawnWarn", "spawnPreview", "initWarn", "inpAnim", "inpParticles",
+    "inpInitMin", "inpInitMax", "spawnWarn", "spawnMinVal", "spawnMaxVal", "initWarn", "inpAnim", "inpParticles",
     "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
     "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
-    "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
+    "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend", "avgCost",
     "advancedApi", "modelHint",
     "logList", "logCount", "bCopyAll", "bLogClear",
     "bLang", "langLbl",
