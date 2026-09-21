@@ -1933,14 +1933,29 @@ document.addEventListener("keydown", (e) => {
 
 /* ═══════════ 启动 ═══════════ */
 
-for (const [id, b] of Object.entries(BACKENDS)) {
-  const o = document.createElement("option");
-  o.value = id;
-  // 开箱即用的后端不加「已验证」标记 —— 那是在暗示它背后有可验证的第三方服务
-  const name = t(b.labelKey);
-  o.textContent = b.needsKey ? `${name}${b.verified ? " ✓" : t("backend.unverifiedTag")}` : name;
-  selBackend.appendChild(o);
+/**
+ * 填充后端的下拉选项。
+ *
+ * 原先这段是**模块求值期**跑一次的裸循环，于是切换语言时下拉框永远停在
+ * 初始化那一刻的语言上 —— 状态栏都跟着变了，唯独这里不动。
+ * 抽成函数后由 `relanguage()` 重跑。
+ */
+function fillBackendOptions(): void {
+  // 重建会丢选中项，先记下来
+  const keep = selBackend.value || state.cfg.provider;
+  selBackend.replaceChildren();
+  for (const [id, b] of Object.entries(BACKENDS)) {
+    const o = document.createElement("option");
+    o.value = id;
+    // 开箱即用的后端不加「已验证」标记 —— 那是在暗示它背后有可验证的第三方服务
+    const name = t(b.labelKey);
+    o.textContent = b.needsKey ? `${name}${b.verified ? " ✓" : t("backend.unverifiedTag")}` : name;
+    selBackend.appendChild(o);
+  }
+  selBackend.value = keep;
 }
+
+fillBackendOptions();
 
 const served = location.protocol === "http:" || location.protocol === "https:";
 const staticHost = isStaticHosting();
@@ -1986,6 +2001,12 @@ function relanguage(): void {
   renderLog();
   updateBackendLabel();
   applyBackendGating(BACKENDS[state.cfg.provider]);
+  // 下拉选项与 Model ID 的占位符都是「生成一次就留着」的，必须显式重建，
+  // 否则它们会停在切换前那门语言
+  fillBackendOptions();
+  fillModelField(BACKENDS[state.cfg.provider], state.cfg.model);
+  // 画布上的「等待对局数据」也是绘制一次就留下的，得重绘
+  chart.redraw();
 }
 
 /** 顶栏的语言按钮：zh ↔ en 对切。标签由 applyDom 按 data-i18n 自动更新。 */

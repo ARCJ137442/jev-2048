@@ -64,6 +64,16 @@ export class ConfidenceChart {
     this.draw();
   }
 
+  /**
+   * 只重绘，不动数据。
+   *
+   * 画布上的文案（如「等待对局数据」）是绘制那一刻写死的，切换界面语言后
+   * 不重绘就会一直停在旧语言。`clear()` 不能用 —— 它会把曲线一起清掉。
+   */
+  redraw(): void {
+    this.draw();
+  }
+
   private draw(): void {
     const ctx = this.ctx;
     const { w, h } = this;
