@@ -369,42 +369,55 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 
 <header>
   <h1>2048 <span class="x">×</span> TypeSafe Jev</h1>
-  <span class="sub" title="每一手都由 Jev 评估模型决定 —— 它返回带校准概率的决策，而非生成的文本">决策由 Jev 评估模型给出</span>
+  <span class="sub" title="每一手都由 Jev 评估模型决定 —— 它返回带校准概率的决策，而非生成的文本" data-i18n-title="app.subtitleTitle" data-i18n="app.subtitle">决策由 Jev 评估模型给出</span>
   <span class="spacer"></span>
 
-  <button class="hbtn" id="bGame" title="棋盘大小、新方块取值区间、动效 —— 与玩家和 Jev 的操作无关的自然属性">
+  <!-- 界面语言。图标取自 Lucide `languages`（ISC），仅 stroke-width 调为与本页其余
+       hbtn 一致。刻意不用地球图标 —— 那在中文语境里常被读作「网络 / 全球」。 -->
+  <button class="hbtn" id="bLang" title="界面语言 / Interface language" data-i18n-title="nav.langTitle">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m5 8 6 6"/>
+      <path d="m4 14 6-6 2-3"/>
+      <path d="M2 5h12"/>
+      <path d="M7 2h1"/>
+      <path d="m22 22-5-10-5 10"/>
+      <path d="M14 18h6"/>
+    </svg><span class="lbl" id="langLbl" data-i18n="nav.langName">中文</span>
+  </button>
+
+  <button class="hbtn" id="bGame" title="棋盘大小、新方块取值区间、动效 —— 与玩家和 Jev 的操作无关的自然属性" data-i18n-title="nav.gameTitle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/>
-    </svg><span class="lbl">游戏</span>
+    </svg><span class="lbl" data-i18n="nav.game">游戏</span>
   </button>
 
-  <button class="hbtn" id="bStrategy" title="上下文（影响 Jev 看到什么）与规则（影响动作如何落实）">
+  <button class="hbtn" id="bStrategy" title="上下文（影响 Jev 看到什么）与规则（影响动作如何落实）" data-i18n-title="nav.strategyTitle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18" cy="12" r="2.2" fill="currentColor" stroke="none"/>
-    </svg><span class="lbl">策略</span>
+    </svg><span class="lbl" data-i18n="nav.strategy">策略</span>
   </button>
 
-  <button class="hbtn" id="bApi" title="用哪个提供商、怎么调用">
+  <button class="hbtn" id="bApi" title="用哪个提供商、怎么调用" data-i18n-title="nav.apiTitle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3.4"/>
     </svg><span class="lbl">API</span>
   </button>
 
-  <button class="hbtn" id="bLog" title="每一次请求的完整往返记录">
+  <button class="hbtn" id="bLog" title="每一次请求的完整往返记录" data-i18n-title="nav.logTitle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/>
-    </svg><span class="lbl">日志</span>
+    </svg><span class="lbl" data-i18n="nav.log">日志</span>
   </button>
 
-  <button class="hbtn" id="bArchive" title="导入 / 导出存档：对局、策略、API 设置、调用日志">
+  <button class="hbtn" id="bArchive" title="导入 / 导出存档：对局、策略、API 设置、调用日志" data-i18n-title="nav.archiveTitle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 7h18v13H3z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 12h6"/>
-    </svg><span class="lbl">存档</span>
+    </svg><span class="lbl" data-i18n="nav.archive">存档</span>
   </button>
 
   <a class="hbtn gh" id="bGithub" href="https://github.com/ARCJ137442/jev-2048"
      target="_blank" rel="noopener noreferrer"
-     title="在 GitHub 上查看源码 · 欢迎 star 与 issue">
+     title="在 GitHub 上查看源码 · 欢迎 star 与 issue" data-i18n-title="nav.githubTitle">
     <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
     </svg>
@@ -415,19 +428,19 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   <section class="stage">
     <div class="board-box">
       <canvas id="board"></canvas>
-      <div class="fb" id="fb"><span>启发式回退</span></div>
+      <div class="fb" id="fb"><span data-i18n="fb.label">启发式回退</span></div>
     </div>
 
     <div class="controls">
-      <button class="primary" id="bToggle" title="让 Jev 接管 / 暂停自动走棋（空格）">▶ 让 Jev 接管</button>
-      <button id="bStep" title="只走一手">单步</button>
-      <button id="bNew" class="ghost" title="重开一局，保留全部设置">↺ 重开</button>
-      <span class="hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> 手动 · <kbd>Space</kbd> 暂停</span>
+      <button class="primary" id="bToggle" title="让 Jev 接管 / 暂停自动走棋（空格）" data-i18n-title="ctrl.takeoverTitle" data-i18n="ctrl.takeover">▶ 让 Jev 接管</button>
+      <button id="bStep" title="只走一手" data-i18n-title="ctrl.stepTitle" data-i18n="ctrl.step">单步</button>
+      <button id="bNew" class="ghost" title="重开一局，保留全部设置" data-i18n-title="ctrl.newTitle" data-i18n="ctrl.new">↺ 重开</button>
+      <span class="hint"><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="ctrl.hintManual">手动 ·</span> <kbd>Space</kbd> <span data-i18n="ctrl.hintPause">暂停</span></span>
     </div>
 
     <div class="pace">
-      <span class="lbl">步进间隔</span>
-      <input type="range" id="pace" min="0" max="5000" step="100" value="2000" title="自动走棋的间隔。0 = 不等，上游多快就多快（测极限用）">
+      <span class="lbl" data-i18n="pace.label">步进间隔</span>
+      <input type="range" id="pace" min="0" max="5000" step="100" value="2000" title="自动走棋的间隔。0 = 不等，上游多快就多快（测极限用）" data-i18n-title="pace.title">
       <span class="val" id="paceVal">2.0s</span>
     </div>
   </section>
@@ -442,16 +455,16 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
 
     <div class="dec">
-      <div class="dec-head"><span class="dot"></span><span>Jev 决策</span><span class="turn" id="dTurn"></span></div>
-      <div id="decision"><div class="idle">尚未开始</div></div>
+      <div class="dec-head"><span class="dot"></span><span data-i18n="decision.title">Jev 决策</span><span class="turn" id="dTurn"></span></div>
+      <div id="decision"><div class="idle" data-i18n="decision.idle">尚未开始</div></div>
     </div>
 
     <div class="chartbox" id="chartBox">
       <div class="cap">
-        <span>置信度追踪</span>
+        <span data-i18n="chart.title">置信度追踪</span>
         <span class="lgd">
-          <span><i style="background:rgba(245,158,11,.35)"></i>上/下界</span>
-          <span><i style="background:#f59e0b"></i>中位</span>
+          <span><i style="background:rgba(245,158,11,.35)"></i><span data-i18n="chart.band">上/下界</span></span>
+          <span><i style="background:#f59e0b"></i><span data-i18n="chart.median">中位</span></span>
         </span>
       </div>
       <canvas id="chart"></canvas>
@@ -460,9 +473,9 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 </main>
 
 <footer>
-  <span><span class="led" id="led"></span><span id="status">就绪</span></span>
-  <span>累计 <b id="cost">$0</b></span>
-  <span>延迟 <b id="lat">—</b></span>
+  <span><span class="led" id="led"></span><span id="status" data-i18n="stats.ready">就绪</span></span>
+  <span><span data-i18n="stats.total">累计</span> <b id="cost">$0</b></span>
+  <span><span data-i18n="stats.latency">延迟</span> <b id="lat">—</b></span>
   <span class="spacer"></span>
   <span id="backend">—</span>
 </footer>
@@ -475,35 +488,34 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 <!-- ══════ 不兼容存档提示 ══════ -->
 <div class="modal" id="incompatModal">
   <div class="modal-box">
-    <h2>发现不兼容的旧存档</h2>
+    <h2 data-i18n="incompat.title">发现不兼容的旧存档</h2>
 
     <div class="warn">
-      <b>本机存有一份旧数据，但当前版本读不懂它。</b><br>
-      它可能是更早版本写下的，或者已被外部修改。<br>
-      为避免丢掉你原本的进度，应用<b>没有</b>自动清理它 —— 请先决定如何处理。
+      <b data-i18n="incompat.desc">本机存有一份旧数据，但当前版本读不懂它。</b><br>
+      <span data-i18n="incompat.whyEdited">它可能是更早版本写下的，或者已被外部修改。</span><br>
+      <span data-i18n="incompat.whyKept">为避免丢掉你原本的进度，应用</span><b data-i18n="incompat.none">没有</b><span data-i18n="incompat.whyDecide">自动清理它 —— 请先决定如何处理。</span>
     </div>
 
     <div class="field">
-      <label>读取失败的原因</label>
+      <label data-i18n="incompat.reason">读取失败的原因</label>
       <div class="desc" id="incompatReason" style="margin-bottom:0"></div>
     </div>
 
     <div class="field">
-      <label>原始数据（截断预览，大小 <span id="incompatSize"></span>）</label>
+      <label><span data-i18n="incompat.raw">原始数据（截断预览，大小</span> <span id="incompatSize"></span>）</label>
       <pre class="rawbox" id="incompatPreview"></pre>
     </div>
 
     <div class="notice-line">
-      <b style="color:var(--accent)">强行加载</b>会尽力从这份数据里抢救出可用的部分：
-      棋盘与分数通常没问题，读不懂的字段会被丢弃并如实告知。<br>
+      <b style="color:var(--accent)" data-i18n="incompat.force">强行加载</b><span data-i18n="incompat.salvage">会尽力从这份数据里抢救出可用的部分： 棋盘与分数通常没问题，读不懂的字段会被丢弃并如实告知。</span><br data-i18n="incompat.order">
       建议顺序：先「导出旧数据」留底，再决定强行加载还是重置。
     </div>
 
     <div class="actions-wrap">
-      <button id="bIncompatExport">⬇ 导出旧数据</button>
-      <button id="bIncompatForce" class="primary">强行加载</button>
-      <button id="bIncompatReset" class="danger">重置回默认</button>
-      <button id="bIncompatLater" class="ghost">稍后再说</button>
+      <button id="bIncompatExport" data-i18n="incompat.export">⬇ 导出旧数据</button>
+      <button id="bIncompatForce" class="primary" data-i18n="incompat.force">强行加载</button>
+      <button id="bIncompatReset" class="danger" data-i18n="incompat.reset">重置回默认</button>
+      <button id="bIncompatLater" class="ghost" data-i18n="incompat.later">稍后再说</button>
     </div>
   </div>
 </div>
@@ -511,30 +523,30 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 <!-- ══════ 额度不足提示 ══════ -->
 <div class="modal" id="quotaModal">
   <div class="modal-box">
-    <h2>额度不足</h2>
+    <h2 data-i18n="quota.title">额度不足</h2>
 
     <div class="warn">
-      <b>当前后端的调用额度已用尽或被限流。</b><br>
+      <b data-i18n="quota.desc">当前后端的调用额度已用尽或被限流。</b><br data-i18n="quota.notNetwork">
       这通常不是网络问题，重试也不会恢复 —— 换个后端或用自己的 Key 即可继续。
     </div>
 
     <div class="field">
-      <label>服务端返回</label>
+      <label data-i18n="quota.serverReturned">服务端返回</label>
       <pre class="rawbox" id="quotaDetail"></pre>
     </div>
 
     <div class="field">
-      <label>可以怎么做</label>
+      <label data-i18n="quota.whatCanDo">可以怎么做</label>
       <div class="desc" style="margin-bottom:0;line-height:1.75">
-        1. 切到 <b>Vercel AI Gateway 直连</b>，填自己的 API Key（推荐，额度归你掌控）<br>
-        2. 换用 <b>TypeSafe 官方</b> 或 <b>OpenRouter</b> 后端<br>
+        <span data-i18n="quota.step1">1. 切到</span> <b data-i18n="quota.gatewayBold">Vercel AI Gateway 直连</b><span data-i18n="quota.gatewayHint">，填自己的 API Key（推荐，额度归你掌控）</span><br>
+        <span data-i18n="quota.step2">2. 换用</span> <b data-i18n="quota.official">TypeSafe 官方</b> <span data-i18n="quota.or">或</span> <b>OpenRouter</b> <span data-i18n="quota.backendWord">后端</span><br data-i18n="quota.step3">
         3. 稍后再试 —— 如果是共享额度的免费试用，等它恢复
       </div>
     </div>
 
     <div class="actions-wrap">
-      <button id="bQuotaSwitch" class="primary">去切换后端</button>
-      <button id="bQuotaClose" class="ghost">稍后再说</button>
+      <button id="bQuotaSwitch" class="primary" data-i18n="quota.switch">去切换后端</button>
+      <button id="bQuotaClose" class="ghost" data-i18n="incompat.later">稍后再说</button>
     </div>
   </div>
 </div>
@@ -549,58 +561,58 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <path d="M3 7h18v13H3z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 12h6"/>
     </svg>
     <div>
-      <h2>存档</h2>
-      <p>四类内容各自独立成档，可分别备份与恢复。导出的是 JSON 文件，导入时逐项校验。</p>
+      <h2 data-i18n="nav.archive">存档</h2>
+      <p data-i18n="archive.desc">四类内容各自独立成档，可分别备份与恢复。导出的是 JSON 文件，导入时逐项校验。</p>
     </div>
   </header>
   <div class="body">
     <div class="field">
-      <label>游戏（对局）</label>
-      <div class="desc">当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大瓷砖。</div>
+      <label data-i18n="archive.game">游戏（对局）</label>
+      <div class="desc" data-i18n="archive.gameDesc">当前棋盘、分数、轮次、记忆，以及棋盘尺寸与历史最高分／最大瓷砖。</div>
       <div class="row2">
-        <button id="bExpGame">导出</button>
-        <button id="bImpGame">导入</button>
+        <button id="bExpGame" data-i18n="archive.export">导出</button>
+        <button id="bImpGame" data-i18n="archive.import">导入</button>
       </div>
     </div>
 
     <div class="field">
-      <label>策略</label>
-      <div class="desc">上下文（规则说明、策略提示、后果预测、记忆轮数）与规则（决策策略、置信度门槛）。</div>
+      <label data-i18n="nav.strategy">策略</label>
+      <div class="desc" data-i18n="archive.strategyDesc">上下文（规则说明、策略提示、后果预测、记忆轮数）与规则（决策策略、置信度门槛）。</div>
       <div class="row2">
-        <button id="bExpStrategy">导出</button>
-        <button id="bImpStrategy">导入</button>
+        <button id="bExpStrategy" data-i18n="archive.export">导出</button>
+        <button id="bImpStrategy" data-i18n="archive.import">导入</button>
       </div>
     </div>
 
     <div class="field">
       <label>API</label>
-      <div class="desc">自动重试参数。<b>不含密钥</b> —— 密钥从不落盘，因此也无法导出。</div>
+      <div class="desc"><span data-i18n="archive.apiDesc">自动重试参数。</span><b data-i18n="archive.noKey">不含密钥</b> <span data-i18n="archive.noKeyDesc">—— 密钥从不落盘，因此也无法导出。</span></div>
       <div class="row2">
-        <button id="bExpApi">导出</button>
-        <button id="bImpApi">导入</button>
+        <button id="bExpApi" data-i18n="archive.export">导出</button>
+        <button id="bImpApi" data-i18n="archive.import">导入</button>
       </div>
     </div>
 
     <div class="field">
-      <label>调用日志</label>
-      <div class="desc">全部请求记录（含完整请求体与响应）。只支持导出 —— 日志是过程记录，导入它没有意义。</div>
+      <label data-i18n="log.title">调用日志</label>
+      <div class="desc" data-i18n="archive.logDesc">全部请求记录（含完整请求体与响应）。只支持导出 —— 日志是过程记录，导入它没有意义。</div>
       <div class="row2">
-        <button id="bExpLog">导出</button>
-        <button disabled title="日志只导出，不支持导入">导入</button>
+        <button id="bExpLog" data-i18n="archive.export">导出</button>
+        <button disabled title="日志只导出，不支持导入" data-i18n-title="archive.logExportOnly" data-i18n="archive.import">导入</button>
       </div>
     </div>
 
     <div class="divider"></div>
 
     <div class="field">
-      <label>整体</label>
+      <label data-i18n="archive.all">整体</label>
       <div class="row2">
-        <button id="bExpAll">导出全部</button>
-        <button id="bArchiveWipe" class="ghost" title="清除本机全部存档并重新载入">清空存档</button>
+        <button id="bExpAll" data-i18n="archive.exportAll">导出全部</button>
+        <button id="bArchiveWipe" class="ghost" title="清除本机全部存档并重新载入" data-i18n-title="archive.wipeTitle" data-i18n="archive.wipe">清空存档</button>
       </div>
     </div>
   </div>
-  <footer><span style="flex:1"></span><button id="bArchiveDone" class="primary">完成</button></footer>
+  <footer><span style="flex:1"></span><button id="bArchiveDone" class="primary" data-i18n="archive.done">完成</button></footer>
 </aside>
 
 <!-- ══════ 游戏：只放「自然属性」——与玩家和 Jev 的操作都无关 ══════ -->
@@ -610,17 +622,17 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M3 9h18"/>
     </svg>
     <div>
-      <h2>游戏</h2>
-      <p>棋盘与新方块的自然属性。这里改任何东西，都不会影响 Jev 看到的内容，也不影响它怎么决策。</p>
+      <h2 data-i18n="nav.game">游戏</h2>
+      <p data-i18n="game.desc">棋盘与新方块的自然属性。这里改任何东西，都不会影响 Jev 看到的内容，也不影响它怎么决策。</p>
     </div>
   </header>
   <div class="body">
     <div class="field">
-      <label>棋盘大小（宽 × 高，各自独立）</label>
+      <label data-i18n="game.boardSize">棋盘大小（宽 × 高，各自独立）</label>
       <div class="range2">
-        <input type="number" id="inpWidth" min="2" max="16" step="1" placeholder="宽 4">
+        <input type="number" id="inpWidth" min="2" max="16" step="1" placeholder="宽 4" data-i18n-ph="game.phWidth">
         <span class="sep">×</span>
-        <input type="number" id="inpHeight" min="2" max="16" step="1" placeholder="高 4">
+        <input type="number" id="inpHeight" min="2" max="16" step="1" placeholder="高 4" data-i18n-ph="game.phHeight">
       </div>
       <div class="presets">
         <button data-w="4" data-h="4">4×4</button>
@@ -628,61 +640,61 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
         <button data-w="8" data-h="8">8×8</button>
         <button data-w="16" data-h="2">16×2</button>
       </div>
-      <div class="tinylbl">2 – 16。改动会立即重开一局；历史纪录按「宽×高」分别记录。</div>
+      <div class="tinylbl" data-i18n="game.boardHint">2 – 16。改动会立即重开一局；历史纪录按「宽×高」分别记录。</div>
     </div>
 
     <div class="field">
-      <label>新方块取值区间</label>
-      <div class="desc">只接受 2 的幂次。</div>
+      <label data-i18n="game.spawnRange">新方块取值区间</label>
+      <div class="desc" data-i18n="game.spawnHint">只接受 2 的幂次。</div>
       <div class="range2">
-        <input type="number" id="inpSpawnMin" min="2" max="4" step="2" placeholder="最小 2">
+        <input type="number" id="inpSpawnMin" min="2" max="4" step="2" placeholder="最小 2" data-i18n-ph="game.phMin2">
         <span class="sep">~</span>
-        <input type="number" id="inpSpawnMax" min="2" max="4" step="2" placeholder="最大 4">
+        <input type="number" id="inpSpawnMax" min="2" max="4" step="2" placeholder="最大 4" data-i18n-ph="game.phMax4">
       </div>
-      <div class="warnline" id="spawnWarn">只能填 2 或 4，且上界不小于下界</div>
+      <div class="warnline" id="spawnWarn" data-i18n="game.spawnWarn">只能填 2 或 4，且上界不小于下界</div>
     </div>
 
     <div class="field">
-      <label>生成分布</label>
+      <label data-i18n="game.dist">生成分布</label>
       <select id="inpDist">
-        <option value="weighted">加权 — 权重为值的倒数，越大越罕见（默认）</option>
-        <option value="uniform">均匀 — 区间内各值等概率</option>
+        <option value="weighted" data-i18n="game.distWeighted">加权 — 权重为值的倒数，越大越罕见（默认）</option>
+        <option value="uniform" data-i18n="game.distUniform">均匀 — 区间内各值等概率</option>
       </select>
-      <div class="desc" style="margin-top:6px;margin-bottom:0">
+      <div class="desc" style="margin-top:6px;margin-bottom:0" data-i18n="game.distNote">
         加权模式下 2 与 4 的出现比约为 2 : 1（P(2)=2/3）；均匀模式各占一半。
       </div>
     </div>
 
     <div class="field">
-      <label>初始瓷砖个数区间</label>
-      <div class="desc">
+      <label data-i18n="game.initRange">初始瓷砖个数区间</label>
+      <div class="desc" data-i18n="game.initDesc">
         开局时随机摆放几个瓷砖。下限不能小于 1 —— 空棋盘上任何方向都动不了，第一步就会判负。
       </div>
       <div class="range2">
-        <input type="number" id="inpInitMin" min="1" step="1" placeholder="最小 1">
+        <input type="number" id="inpInitMin" min="1" step="1" placeholder="最小 1" data-i18n-ph="game.phMin1">
         <span class="sep">~</span>
-        <input type="number" id="inpInitMax" min="1" step="1" placeholder="最大 2">
+        <input type="number" id="inpInitMax" min="1" step="1" placeholder="最大 2" data-i18n-ph="game.phMax2">
       </div>
-      <div class="warnline" id="initWarn">下限至少为 1，且不得大于上限</div>
+      <div class="warnline" id="initWarn" data-i18n="game.initWarn">下限至少为 1，且不得大于上限</div>
     </div>
 
     <div class="field">
-      <label>动效</label>
+      <label data-i18n="game.fx">动效</label>
       <label class="switch" style="margin-bottom:9px">
         <input type="checkbox" id="inpAnim" checked>
-        <span class="track"></span><span class="txt">滑动 / 合并 / 入场动画</span>
+        <span class="track"></span><span class="txt" data-i18n="game.fxAnim">滑动 / 合并 / 入场动画</span>
       </label>
       <label class="switch">
         <input type="checkbox" id="inpParticles" checked>
-        <span class="track"></span><span class="txt">决策方向箭头粒子</span>
+        <span class="track"></span><span class="txt" data-i18n="game.fxParticles">决策方向箭头粒子</span>
       </label>
     </div>
   </div>
   <footer>
-    <button id="bGameReset" class="ghost" title="棋盘尺寸、新方块区间、动效回到出厂值">恢复默认</button>
-    <button id="bScoreReset" class="ghost" title="清空各棋盘尺寸的历史最高分与最大瓷砖">重置最高分</button>
+    <button id="bGameReset" class="ghost" title="棋盘尺寸、新方块区间、动效回到出厂值" data-i18n-title="game.resetTitle" data-i18n="game.reset">恢复默认</button>
+    <button id="bScoreReset" class="ghost" title="清空各棋盘尺寸的历史最高分与最大瓷砖" data-i18n-title="game.scoreResetTitle" data-i18n="game.scoreReset">重置最高分</button>
     <span style="flex:1"></span>
-    <button id="bGameDone" class="primary">完成</button>
+    <button id="bGameDone" class="primary" data-i18n="archive.done">完成</button>
   </footer>
 </aside>
 
@@ -693,72 +705,72 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18" cy="12" r="2.2" fill="currentColor" stroke="none"/>
     </svg>
     <div>
-      <h2>策略</h2>
-      <p>分两部分：<b style="color:var(--accent);font-weight:600">上下文</b>决定 Jev 看到什么，<b style="color:var(--accent);font-weight:600">规则</b>决定拿到答案后怎么做。</p>
+      <h2 data-i18n="nav.strategy">策略</h2>
+      <p><span data-i18n="strategy.introA">分两部分：</span><b style="color:var(--accent);font-weight:600" data-i18n="strategy.introCtx">上下文</b><span data-i18n="strategy.introMid">决定 Jev 看到什么，</span><b style="color:var(--accent);font-weight:600" data-i18n="strategy.introRule">规则</b><span data-i18n="strategy.introEnd">决定拿到答案后怎么做。</span></p>
     </div>
   </header>
   <div class="body">
     <div class="section-head">
-      <span class="sec-title">上下文</span>
-      <span class="sec-note">改动会进入请求，影响 Jev 的判断 —— 效果看「概率分布」</span>
+      <span class="sec-title" data-i18n="strategy.introCtx">上下文</span>
+      <span class="sec-note" data-i18n="strategy.ctxNote">改动会进入请求，影响 Jev 的判断 —— 效果看「概率分布」</span>
     </div>
 
     <div class="field">
-      <label>规则说明 → state.rule_description</label>
+      <label data-i18n="strategy.ruleDescLabel">规则说明 → state.rule_description</label>
       <textarea id="ruleDesc" rows="5"></textarea>
     </div>
 
     <div class="field">
-      <label>策略提示 → state.strategy_hint</label>
+      <label data-i18n="strategy.hintLabel">策略提示 → state.strategy_hint</label>
       <textarea id="hintText" rows="6"></textarea>
     </div>
 
     <div class="field">
-      <label>后果预测 → questions.criteria</label>
+      <label data-i18n="strategy.criteriaLabel">后果预测 → questions.criteria</label>
       <label class="switch">
         <input type="checkbox" id="inpCons" checked>
-        <span class="track"></span><span class="txt">包含每步的具体后果</span>
+        <span class="track"></span><span class="txt" data-i18n="strategy.criteriaOn">包含每步的具体后果</span>
       </label>
-      <div class="desc" style="margin-top:8px;margin-bottom:0">
+      <div class="desc" style="margin-top:8px;margin-bottom:0" data-i18n="strategy.criteriaDesc">
         开启后每个候选方向附带合并得分、剩余空格、最大块是否在角落。关掉它，Jev 只能看到方向名。
       </div>
     </div>
 
     <div class="field">
-      <label>记忆轮数 → state.recent_history</label>
-      <div class="desc">
+      <label data-i18n="strategy.memoryLabel">记忆轮数 → state.recent_history</label>
+      <div class="desc" data-i18n="strategy.memoryDesc">
         把最近 n 轮的「局面 + 当时走的方向 + 当时得分」一并发给 Jev。0 = 不加入（原版行为）。
       </div>
       <div class="slider-row">
         <input type="range" id="inpMemory" min="0" max="30" step="1" value="0">
         <span class="val" id="memoryVal">0</span>
-        <button class="mini" id="bMemMax" title="在上下文预算内尽量塞满">最大</button>
+        <button class="mini" id="bMemMax" title="在上下文预算内尽量塞满" data-i18n-title="strategy.maxTitle" data-i18n="strategy.max">最大</button>
       </div>
-      <div class="tinylbl">上限受模型上下文窗口约束（32000 token 的 55% 预算）。</div>
+      <div class="tinylbl" data-i18n="strategy.memoryNote">上限受模型上下文窗口约束（32000 token 的 55% 预算）。</div>
     </div>
 
     <div class="divider"></div>
 
     <div class="section-head">
-      <span class="sec-title">规则</span>
-      <span class="sec-note">不进入请求，Jev 看不到 —— 效果看「实际走了哪一步」</span>
+      <span class="sec-title" data-i18n="strategy.introRule">规则</span>
+      <span class="sec-note" data-i18n="strategy.ruleNote">不进入请求，Jev 看不到 —— 效果看「实际走了哪一步」</span>
     </div>
 
     <div class="field">
-      <label>决策策略</label>
+      <label data-i18n="strategy.policy">决策策略</label>
       <select id="inpStrategy">
-        <option value="greedy">贪心 — 取概率最高的合法方向</option>
-        <option value="sample">概率采样 — 按分布随机（有探索性）</option>
-        <option value="threshold">置信度门槛 — 低于阈值时标记</option>
+        <option value="greedy" data-i18n="strategy.greedy">贪心 — 取概率最高的合法方向</option>
+        <option value="sample" data-i18n="strategy.sample">概率采样 — 按分布随机（有探索性）</option>
+        <option value="threshold" data-i18n="strategy.thresholdOpt">置信度门槛 — 低于阈值时标记</option>
       </select>
-      <div class="desc" style="margin-top:6px;margin-bottom:0">
+      <div class="desc" style="margin-top:6px;margin-bottom:0" data-i18n="strategy.noHeuristic">
         本 Demo 不含启发式兜底：拿不准时不换别的算法，而是把不确定性标出来交给你判断。
       </div>
     </div>
 
     <div class="field" id="thresholdRow" style="display:none">
-      <label>置信度门槛</label>
-      <div class="desc">看着侧栏的置信度追踪图来定：低于该值的回合会被标记。</div>
+      <label data-i18n="strategy.thresholdLabel">置信度门槛</label>
+      <div class="desc" data-i18n="strategy.thresholdNote">看着侧栏的置信度追踪图来定：低于该值的回合会被标记。</div>
       <div class="slider-row">
         <input type="range" id="inpThreshold" min="0" max="100" step="5" value="0">
         <span class="val" id="thresholdVal">0%</span>
@@ -766,9 +778,9 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
   </div>
   <footer>
-    <button id="bStrategyReset" class="ghost" title="上下文与规则全部回到出厂值">恢复默认</button>
+    <button id="bStrategyReset" class="ghost" title="上下文与规则全部回到出厂值" data-i18n-title="strategy.resetTitle" data-i18n="game.reset">恢复默认</button>
     <span style="flex:1"></span>
-    <button id="bStrategyDone" class="primary">完成</button>
+    <button id="bStrategyDone" class="primary" data-i18n="archive.done">完成</button>
   </footer>
 </aside>
 
@@ -780,16 +792,16 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </svg>
     <div>
       <h2>API</h2>
-      <p>用哪个提供商、怎么调用。这里只影响请求如何送达，不改变提示词或游戏规则。</p>
+      <p data-i18n="api.desc">用哪个提供商、怎么调用。这里只影响请求如何送达，不改变提示词或游戏规则。</p>
     </div>
   </header>
   <div class="body">
     <div class="warn">
-      <b>密钥安全</b><br>
+      <b data-i18n="api.keySafety">密钥安全</b><br data-i18n="api.keyNote">
       只有选「直连」类后端时才需要填写。密钥仅存于当前页面的内存，刷新即清除，不会写入本地存储。
     </div>
 
-    <div class="field"><label>后端</label><select id="selBackend"></select></div>
+    <div class="field"><label data-i18n="quota.backendWord">后端</label><select id="selBackend"></select></div>
     <div class="field"><label>API Key</label><input type="password" id="inpKey" autocomplete="off"></div>
     <div class="field">
       <label>Model ID</label>
@@ -801,20 +813,19 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <div class="field">
         <label>Base URL</label>
         <input type="text" id="inpBase">
-        <div class="tinylbl">只有自建 / 直连后端需要改这里</div>
+        <div class="tinylbl" data-i18n="api.customOnly">只有自建 / 直连后端需要改这里</div>
       </div>
     </div>
 
 
     <div class="field">
-      <label>自动重试</label>
+      <label data-i18n="api.retry">自动重试</label>
       <div class="desc">
-        只对瞬时故障重试（网络错误 / 429 / 5xx）。参数错误、鉴权失败会直接报错。
-        填 <code>inf</code> 表示无限重试。
+        <span data-i18n="api.retryNote">只对瞬时故障重试（网络错误 / 429 / 5xx）。参数错误、鉴权失败会直接报错。 填</span> <code>inf</code> <span data-i18n="api.retryInfNote">表示无限重试。</span>
       </div>
       <div class="row2">
-        <input type="text" id="inpRetryMax" placeholder="最大次数，或 inf">
-        <input type="number" id="inpRetryBase" min="100" max="10000" step="100" placeholder="退避基数 ms">
+        <input type="text" id="inpRetryMax" placeholder="最大次数，或 inf" data-i18n-ph="api.phRetryMax">
+        <input type="number" id="inpRetryBase" min="100" max="10000" step="100" placeholder="退避基数 ms" data-i18n-ph="api.phRetryBase">
       </div>
       <div class="tinylbl" id="retryPreview"></div>
     </div>
@@ -822,10 +833,10 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     <div class="note" id="backendNote"></div>
   </div>
   <footer>
-    <button id="bApiReset" class="ghost" title="自动重试参数回到出厂值；后端与密钥不受影响">恢复默认</button>
+    <button id="bApiReset" class="ghost" title="自动重试参数回到出厂值；后端与密钥不受影响" data-i18n-title="api.resetTitle" data-i18n="game.reset">恢复默认</button>
     <span style="flex:1"></span>
-    <button id="bApiCancel" class="ghost">取消</button>
-    <button id="bSaveApi" class="primary">保存</button>
+    <button id="bApiCancel" class="ghost" data-i18n="api.cancel">取消</button>
+    <button id="bSaveApi" class="primary" data-i18n="api.save">保存</button>
   </footer>
 </aside>
 
@@ -835,15 +846,15 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
       <path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/>
     </svg>
-    <div><h2>调用日志 <span id="logCount" style="font:400 11px var(--mono);color:var(--ink-4)"></span></h2>
-    <p>每一次请求的完整往返。展开可看原始 JSON 并单独复制。</p></div>
+    <div><h2><span data-i18n="log.title">调用日志</span> <span id="logCount" style="font:400 11px var(--mono);color:var(--ink-4)"></span></h2>
+    <p data-i18n="log.desc">每一次请求的完整往返。展开可看原始 JSON 并单独复制。</p></div>
   </header>
-  <div class="body" id="logList"><div class="idle">还没有请求记录</div></div>
+  <div class="body" id="logList"><div class="idle" data-i18n="log.empty">还没有请求记录</div></div>
   <footer>
-    <button id="bCopyAll">复制全部</button>
-    <button id="bLogClear" class="ghost" title="清空全部调用日志（不可撤销）">清空</button>
+    <button id="bCopyAll" data-i18n="log.copyAll">复制全部</button>
+    <button id="bLogClear" class="ghost" title="清空全部调用日志（不可撤销）" data-i18n-title="log.clearTitle" data-i18n="log.clear">清空</button>
     <span style="flex:1"></span>
-    <button id="bLogDone" class="primary">完成</button>
+    <button id="bLogDone" class="primary" data-i18n="archive.done">完成</button>
   </footer>
 </aside>
 

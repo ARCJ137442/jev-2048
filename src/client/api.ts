@@ -19,6 +19,8 @@ import type {
   Questions,
 } from "../shared/types.js";
 
+import { t } from "./i18n.js";
+
 /* ══════════════ 静态托管支持 ══════════════ */
 
 /**
@@ -62,82 +64,64 @@ export function resolveBase(base: string): string {
 
 export const BACKENDS: Record<BackendId, BackendConfig> = {
   localproxy: {
-    label: "免费试用",
+    labelKey: "backend.freeTrial",
     base: "/api/evaluate",
     model: "typesafe-ai/jev",
-    note:
-      "由本站的服务器端代为调用，API Key 只存在于服务端环境变量，" +
-      "浏览器全程接触不到（DevTools 里也看不到）。额度有限，用尽后请改用其他后端。",
+    noteKey: "backend.freeTrialDesc",
     verified: true,
     managed: true,
     needsKey: false,
   },
   openrouterproxy: {
-    label: "免费试用 2",
+    labelKey: "backend.freeTrial2",
     base: "/api/evaluate2",
     model: "typesafe/jev-1.13",
-    note:
-      "与「免费试用」同一套服务端代理架构，走另一个上游。密钥同样只存在于服务端。" +
-      "额度独立，一个用尽时另一个可能还有余量。",
+    noteKey: "backend.freeTrial2Desc",
     verified: true,
     managed: true,
     needsKey: false,
   },
   vercel: {
-    label: "Vercel AI Gateway",
+    labelKey: "backend.vercel",
     base: "https://ai-gateway.vercel.sh/v1/evaluate",
     model: "typesafe-ai/jev",
-    note: "浏览器直连。端点 /v1/evaluate，CORS 已实测全开，但密钥会进入浏览器内存。",
+    noteKey: "backend.vercelDesc",
     verified: true,
     managed: false,
     needsKey: true,
   },
   typesafe: {
-    label: "TypeSafe 官方",
+    labelKey: "backend.typesafe",
     base: "https://api.typesafe.ai/v1/systemone",
     model: "jev-latest",
-    note:
-      "端点与协议已由官方公开的 openapi.json（v0.2.0）确认：只有 POST /v1/systemone 一个决策端点。" +
-      "未持密钥实测过。布尔类型判别值是 noul。需要 TypeSafe 账号。",
+    noteKey: "backend.typesafeDesc",
     verified: true,
     managed: false,
     needsKey: true,
   },
   openrouter: {
-    label: "OpenRouter 直连",
+    labelKey: "backend.openrouter",
     base: "https://openrouter.ai/api/v1/systemone",
     model: "typesafe/jev-1.13",
-    note:
-      "已实测可用。模型 ID 必须是 typesafe/jev-1.13（typesafe/jev-latest 与 typesafe-ai/jev 都会报不存在）。" +
-      "注意：OpenRouter 的布尔类型判别值是 noul，Vercel 那边叫 boolean，两家相反。",
+    noteKey: "backend.openrouterDesc",
     verified: true,
     managed: false,
     needsKey: true,
   },
   laya: {
-    label: "本地 Laya 服务器",
+    labelKey: "backend.laya",
     base: "http://127.0.0.1:8137/v1/systemone",
     model: "typed-decisions",
-    note:
-      "Laya 是 Jev 的**开源替代**：非自回归决策模型，一次前向回答全部问题，无文本生成。" +
-      "它本身是 Python 包、不带 HTTP 服务，需要自己包一层实现 SystemOne 协议的 sidecar。" +
-      "⚠ 上下文窗口小得多（english=512 / multilingual 与 typed-decisions=1024 token），" +
-      "且 confidence 不在同一尺度 —— 为 Jev 标定的阈值不能直接套用。" +
-      "类型判别值是 noul。无鉴权、无计费、不出网。",
+    noteKey: "backend.layaDesc",
     verified: false,
     managed: false,
     needsKey: false,
   },
   lmstudio: {
-    label: "自建 / 本地兼容端点",
+    labelKey: "backend.custom",
     base: "http://localhost:1234/v1/systemone",
     model: "jev-latest",
-    note:
-      "指向任何实现了 SystemOne 协议的服务 —— LiteLLM proxy 的 /typesafe 透传、" +
-      "LangChain TypeSafeClassifier 配 TYPESAFE_BASE_URL、或你自己写的一层转换。" +
-      "⚠ 普通的 OpenAI 兼容端点（LM Studio / vLLM / Ollama 的 /v1/chat/completions）" +
-      "**打不通 Jev** —— 它是决策模型不是文本模型。必须让本地侧实现 SystemOne 协议，" +
-      "把 OpenAI 兼容留在文本模型那一层。",
+    noteKey: "backend.customDesc",
     verified: false,
     managed: false,
     needsKey: false,
@@ -252,7 +236,7 @@ async function callOnce(
     res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   } catch (e) {
     // 网络层失败（断网、CORS、DNS）—— 一律可重试
-    throw new JevError(`无法连接 ${url}：${(e as Error).message}`, undefined, true);
+    throw new JevError(t("err.connect", { url, msg: (e as Error).message }), undefined, true);
   }
 
   const text = await res.text();
@@ -262,7 +246,7 @@ async function callOnce(
     data = JSON.parse(text);
   } catch {
     throw new JevError(
-      `响应不是 JSON (HTTP ${res.status})：${text.slice(0, 200)}`,
+      t("err.notJson", { status: res.status, body: text.slice(0, 200) }),
       res.status,
       isRetryableStatus(res.status),
     );
@@ -278,7 +262,7 @@ async function callOnce(
     );
   }
   if (!data.answers) {
-    throw new JevError(`响应缺少 answers 字段：${text.slice(0, 200)}`, res.status, false);
+    throw new JevError(t("err.noAnswers", { body: text.slice(0, 200) }), res.status, false);
   }
 
   const u = data.usage ?? {};

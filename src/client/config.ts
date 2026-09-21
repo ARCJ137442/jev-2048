@@ -10,6 +10,7 @@ import {
   SPAWN_ALLOWED,
   type SpawnDist,
 } from "../shared/types.js";
+import { detectLang, type Lang } from "./i18n.js";
 
 const KEY = "jev2048.v1";
 
@@ -57,6 +58,13 @@ export interface Persisted {
   context: ContextSettings;
   /** 重试等非敏感 API 设置。API Key 绝不在这里。 */
   api: ApiSettings;
+  /**
+   * 界面语言。
+   *
+   * 刻意放在顶层而**不放进 `GameSettings`**：否则「游戏」面板的「恢复默认」
+   * 会连语言一起重置掉 —— 语言是应用级设置，不是游戏的自然属性。
+   */
+  lang: Lang;
   /** 各棋盘尺寸下的历史最高分 */
   highScores: Record<string, number>;
   /** 各棋盘尺寸下达成过的最大瓷砖值 */
@@ -82,15 +90,50 @@ export const DEFAULT_GAME: GameSettings = {
   memory: 0,
 };
 
+/**
+ * 出厂默认的「上下文」。
+ *
+ * 只描述 2048 的**不变量** —— 压实、同值合并、计分、无路可走则结束。
+ * 刻意**不**写死「每次生成几个方块」「棋盘多大」「目标是 2048」：这些在
+ * 「游戏」面板里都能改，写死了就会与当前设置互相矛盾，相当于对 Jev 说谎，
+ * 而 Jev 的决策正是建立在规则描述之上。
+ *
+ * 棋盘尺寸这类会变的量，交给请求里的 `board_legend` 动态携带。
+ */
 export const DEFAULT_CONTEXT: ContextSettings = {
-  ruleDesc: `你正在玩 2048 游戏。棋盘是矩形网格，0 表示空格。
-每次移动后，会在一个随机空位生成一个新方块。
-相同的两个方块相撞会合并成它们之和，并计入得分。目标是合并出 2048。`,
+  ruleDesc: `你正在玩「2048」。棋盘是矩形网格，0 表示空格，其余数字是方块的值（2 的幂）。
+
+每次移动，所有方块都朝该方向尽量滑到底；同一行或同一列中相邻且数值相同的两个方块相撞时，会合并成一个，数值为二者之和，得分随之增加。
+每次移动后，棋盘上会补入新的方块。当任何方向都无法再移动时，游戏结束。
+
+目标是让棋盘上出现尽可能大的方块，并累积尽可能高的分数。`,
   strategyHint: `策略要点：
-- 保持棋盘单调（数字从一角向另一角递减）
+- 保持棋盘单调（数值从一角向另一角递减）
 - 把最大方块固定在角落里
 - 避免频繁切换移动方向
 - 保留足够的空格`,
+  consequences: true,
+};
+
+/**
+ * 与 {@link DEFAULT_CONTEXT} 等价的英文预设。
+ *
+ * 单独存放而**不随界面语言自动切换**：上下文是实验变量，自动改写会让
+ * 跨语言的对局不可比，也会覆盖用户已经编辑过的内容。由用户在「策略」
+ * 面板主动触发才应用。
+ */
+export const DEFAULT_CONTEXT_EN: ContextSettings = {
+  ruleDesc: `You are playing 2048. The board is a rectangular grid where 0 marks an empty cell and every other number is a tile value (a power of two).
+
+On each move, all tiles slide as far as possible in that direction; when two tiles of equal value collide in the same row or column, they merge into one tile whose value is their sum, and the score increases accordingly.
+New tiles are added to the board after each move. The game ends when no direction can move any tile.
+
+The goal is to build the largest possible tile on the board and accumulate the highest possible score.`,
+  strategyHint: `Strategy notes:
+- Keep the board monotonic (values decreasing from one corner toward the opposite one)
+- Anchor the largest tile in a corner
+- Avoid switching move directions too often
+- Keep enough empty cells available`,
   consequences: true,
 };
 
@@ -205,6 +248,12 @@ export function load(): Persisted {
     typeof localStorage === "undefined" ? null : localStorage.getItem(KEY),
   );
 
+  // 语言要先定下来 —— 下面 context 的默认值按它取。只有「首次运行」或
+  // 「context 字段缺失」时才会用到默认值，用户存过的文本一律原样保留。
+  const rawLang = (o as Record<string, unknown> | null)?.lang;
+  const lang: Lang = rawLang === "en" || rawLang === "zh" ? rawLang : detectLang();
+  const ctxDefault = lang === "en" ? DEFAULT_CONTEXT_EN : DEFAULT_CONTEXT;
+
   const g = (o?.game ?? {}) as Partial<GameSettings>;
   const c = (o?.context ?? {}) as Partial<ContextSettings>;
   const a = (o?.api ?? {}) as Partial<ApiSettings>;
@@ -242,10 +291,10 @@ export function load(): Persisted {
           : Math.max(0, Math.min(60, Math.round(Number(g.memory) || 0))),
     },
     context: {
-      ruleDesc: typeof c.ruleDesc === "string" ? c.ruleDesc : DEFAULT_CONTEXT.ruleDesc,
+      ruleDesc: typeof c.ruleDesc === "string" ? c.ruleDesc : ctxDefault.ruleDesc,
       strategyHint:
-        typeof c.strategyHint === "string" ? c.strategyHint : DEFAULT_CONTEXT.strategyHint,
-      consequences: c.consequences ?? DEFAULT_CONTEXT.consequences,
+        typeof c.strategyHint === "string" ? c.strategyHint : ctxDefault.strategyHint,
+      consequences: c.consequences ?? ctxDefault.consequences,
     },
     api: {
       // undefined → 默认值；显式 null → 无限重试
@@ -255,6 +304,7 @@ export function load(): Persisted {
           : Math.max(0, Math.min(MAX_RETRY, Math.round(Number(a.retryMax ?? DEFAULT_API.retryMax) || 0))),
       retryBaseMs: Math.max(100, Math.min(10_000, Number(a.retryBaseMs ?? DEFAULT_API.retryBaseMs) || 800)),
     },
+    lang,
     highScores:
       o?.highScores && typeof o.highScores === "object" ? { ...o.highScores } : {},
     bestTiles:

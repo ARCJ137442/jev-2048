@@ -9,6 +9,7 @@
  * 视觉：暖橙色阶，暗褐 → 琥珀 → 金黄，靠明度对比区分空格子与数字格。
  */
 import { COLS, ROWS, type Direction, type Tile } from "../shared/types.js";
+import { t } from "./i18n.js";
 
 interface Swatch {
   bg: string;
@@ -138,7 +139,7 @@ export class BoardRenderer {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) throw new Error("无法获取 2D 绘图上下文");
+    if (!ctx) throw new Error(t("err.noCanvas"));
     this.ctx = ctx;
   }
 

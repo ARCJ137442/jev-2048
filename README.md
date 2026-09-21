@@ -3,6 +3,14 @@
 |**简体中文** | [English](README.en.md)|
 |:-:|:-:|
 
+> **English readers:** full English documentation → [**README.en.md**](README.en.md)
+>
+> A web lab that hands **every move in 2048** to [TypeSafe AI's Jev](https://www.typesafe.ai/) — a System One model
+> that returns typed decisions with calibrated probabilities instead of generated text. Each turn is a single `Choice`
+> over the four directions with **no heuristic fallback**, so every move stays attributable to Jev. Probability
+> distribution, confidence, latency and token cost are surfaced live in the UI, alongside editable prompts and
+> board rules, bring-your-own-key backends, and archive import/export.
+
 <!-- 📝徽章安排参考：https://daily.dev/blog/readme-badges-github-best-practices#organizing-badges-in-your-readme -->
 
 ![License](https://img.shields.io/badge/license-MIT-78dce8?style=for-the-badge)

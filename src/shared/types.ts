@@ -31,13 +31,16 @@ export const BOARD_PRESETS: Array<[number, number]> = [
 export function setBoardSize(cols: number, rows: number): void {
   const c = Math.round(cols);
   const r = Math.round(rows);
-  const bad = (v: number, name: string): never => {
+  // 消息刻意保持**语言中立（英文）**：本模块被 client 与 server 共用，
+  // 依赖 client 的 i18n 会把分层搞反。这里是内部断言，正常路径不会触发
+  // —— UI 侧的输入有 config.clampBoardSize 兜底。
+  const bad = (v: number, axis: string): never => {
     throw new Error(
-      `棋盘${name}需在 ${MIN_BOARD}–${MAX_BOARD} 之间，收到 ${v}`,
+      `Board ${axis} must be between ${MIN_BOARD} and ${MAX_BOARD}, got ${v}`,
     );
   };
-  if (!Number.isFinite(c) || c < MIN_BOARD || c > MAX_BOARD) bad(c, "宽");
-  if (!Number.isFinite(r) || r < MIN_BOARD || r > MAX_BOARD) bad(r, "高");
+  if (!Number.isFinite(c) || c < MIN_BOARD || c > MAX_BOARD) bad(c, "width");
+  if (!Number.isFinite(r) || r < MIN_BOARD || r > MAX_BOARD) bad(r, "height");
   COLS = c;
   ROWS = r;
 }
@@ -199,10 +202,16 @@ export type BackendId =
   | "lmstudio";
 
 export interface BackendConfig {
-  label: string;
+  /**
+   * 展示名与说明文字的**词条 key**，不是成品文案。
+   *
+   * 存 key 而不是文本：`BACKENDS` 是模块级常量，在模块求值那一刻就把文案
+   * 定死了，之后切换界面语言再也改不动。展示时用 `t(b.labelKey)`。
+   */
+  labelKey: string;
+  noteKey: string;
   base: string;
   model: string;
-  note: string;
   verified: boolean;
   /** 是否需要用户在浏览器中输入密钥（代理模式不需要） */
   needsKey: boolean;

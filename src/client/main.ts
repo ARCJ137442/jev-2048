@@ -86,11 +86,31 @@ import {
   save,
   type Persisted,
 } from "./config.js";
+import {
+  applyDom,
+  getLang,
+  onLangChange,
+  setLang,
+  t,
+  type Lang,
+} from "./i18n.js";
 
 /* ═══════════ 常量 ═══════════ */
 
 const ARROW: Record<Direction, string> = { up: "↑", down: "↓", left: "←", right: "→" };
+
+/**
+ * 方向的中文名 —— **只服务于喂给 Jev 的 `criteria`，刻意不随界面语言变化**。
+ *
+ * 提示词属于实验变量：随界面语言改写会让跨语言的对局不可比，
+ * 也违背本项目「测量 Jev」的定位。界面要显示方向名请用 {@link dirLabel}。
+ */
 const NAME: Record<Direction, string> = { up: "上", down: "下", left: "左", right: "右" };
+
+/** 界面显示用的方向名，随语言切换 */
+function dirLabel(d: Direction): string {
+  return t(`dir.${d}`);
+}
 
 /** 模型上下文窗口（typesafe-ai/jev 元数据里的 context_window） */
 const CONTEXT_WINDOW = 32000;
@@ -122,8 +142,8 @@ function assertDom(ids: string[]): void {
   const missing = ids.filter((id) => !document.getElementById(id));
   if (missing.length) {
     throw new Error(
-      `页面缺少 ${missing.length} 个必需元素：${missing.map((m) => "#" + m).join(", ")}\n` +
-        `这通常意味着 index.html 与 main.ts 不同步。`,
+      `${t("boot.missingDom", { n: missing.length, list: missing.map((m) => "#" + m).join(", ") })}\n` +
+        t("boot.missingDomHint"),
     );
   }
 }
@@ -174,9 +194,27 @@ const state: AppState = {
 const ledEl = $("led");
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-function setLed(cls: "" | "on" | "busy" | "err", text: string): void {
+/**
+ * 最近一次的状态栏内容。
+ *
+ * 存 **key 而不是已翻译的文本** —— 切换语言时要能按新语言重画，
+ * 而状态栏是「一次性写上去」的，没有别的途径能恢复它。
+ * 每次 setLed 都会覆盖它，所以重放的一定是当前状态，不会显示过期信息。
+ */
+let lastLed: {
+  cls: "" | "on" | "busy" | "err";
+  key: string;
+  params?: Record<string, string | number>;
+} | null = null;
+
+function setLed(
+  cls: "" | "on" | "busy" | "err",
+  key: string,
+  params?: Record<string, string | number>,
+): void {
+  lastLed = { cls, key, params };
   ledEl.className = "led" + (cls ? " " + cls : "");
-  $("status").textContent = text;
+  $("status").textContent = t(key, params);
 }
 
 function retryPolicy(): RetryPolicy {
@@ -393,16 +431,39 @@ function buildQuestions(tiles: Tile[], detailed: boolean): Questions {
 
 /* ═══════════ 决策面板 ═══════════ */
 
+/**
+ * 决策面板最后一次渲染的参数。
+ *
+ * 面板是**一次性画好**的（直接写 innerHTML），没有别的途径能恢复内容；
+ * 切换语言时必须按新语言重画，所以参数得留下来重放。
+ * 存的是**词条 key 而不是译文** —— 存译文的话重放出来还是旧语言。
+ */
+let lastDecision:
+  | {
+      answer: ChoiceAnswer | null;
+      move: Direction;
+      latency: number;
+      tokens: number;
+      noteKey: string;
+      coerced: boolean;
+      noteParams?: Record<string, string | number>;
+    }
+  | null = null;
+
 function renderDecision(
   answer: ChoiceAnswer | null,
   move: Direction,
   latency: number,
   tokens: number,
-  note: string,
+  noteKey: string,
   coerced: boolean,
+  noteParams?: Record<string, string | number>,
 ): void {
+  lastDecision = { answer, move, latency, tokens, noteKey, coerced, noteParams };
+
   const host = $("decision");
   $("dTurn").textContent = state.turn ? `#${state.turn}` : "";
+  const note = t(noteKey, noteParams);
 
   if (!answer) {
     host.innerHTML = `<div class="idle">${note}</div>`;
@@ -424,11 +485,21 @@ function renderDecision(
 
   host.innerHTML = `<div class="bars">${bars}</div>
     <div class="meta">
-      <span>置信 <b>${(answer.confidence ?? 0).toFixed(3)}</b></span>
+      <span>${t("decision.confidence")} <b>${(answer.confidence ?? 0).toFixed(3)}</b></span>
       <span>${latency.toFixed(0)}ms</span>
       <span>${tokens} tok</span>
     </div>
     ${coerced ? `<div class="note-warn">${note}</div>` : ""}`;
+}
+
+/**
+ * 决策面板的「空闲」文案（尚未开始 / 已恢复上一局）。
+ *
+ * 同样走 renderDecision 的那份缓存 —— 否则切换语言时这块会留在旧语言里。
+ * `answer` 为 null 时 `move` 不参与渲染，传什么值都无所谓。
+ */
+function renderDecisionIdle(key: string, params?: Record<string, string | number>): void {
+  renderDecision(null, "up", 0, 0, key, false, params);
 }
 
 /* ═══════════ 覆盖层 ═══════════ */
@@ -478,7 +549,7 @@ async function doTurn(): Promise<void> {
   state.busy = true;
   const turnStart = performance.now();
   const at = new Date().toISOString();
-  setLed("busy", "调用 Jev…");
+  setLed("busy", "status.calling");
 
   const g = store.game;
   const legal = validMoves(state.tiles);
@@ -492,7 +563,8 @@ async function doTurn(): Promise<void> {
   let latency = 0;
   let tokens = 0;
   let move: Direction | null = null;
-  let note = "";
+  let noteKey = "";
+  let noteParams: Record<string, string | number> | undefined;
   let coerced = false;
   let belowThreshold: boolean | undefined;
   let response: unknown = null;
@@ -506,7 +578,7 @@ async function doTurn(): Promise<void> {
       retryPolicy(),
       {
         onRetry: (attempt, err, delay) => {
-          setLed("busy", `重试 ${attempt}（${(delay / 1000).toFixed(1)}s 后）`);
+          setLed("busy", "status.retrying", { n: attempt, s: (delay / 1000).toFixed(1) });
           void err;
         },
       },
@@ -516,16 +588,17 @@ async function doTurn(): Promise<void> {
     response = res.raw;
 
     const raw = res.answers.best_move;
-    if (!raw || raw.type !== "choice") throw new Error("响应中缺少 choice 类型的 best_move");
+    if (!raw || raw.type !== "choice") throw new Error(t("err.noChoice"));
     answer = raw;
 
     const r = resolveDecision(answer, legal, g.strategy as Strategy, g.threshold);
     move = r.move;
-    note = r.reason;
+    noteKey = r.reasonKey;
+    noteParams = r.reasonParams;
     coerced = r.coerced;
     belowThreshold = r.belowThreshold;
 
-    setLed("on", "Jev 在线");
+    setLed("on", "status.online");
     $("fb").classList.remove("on");
   } catch (err) {
     error = (err as Error).message;
@@ -534,18 +607,19 @@ async function doTurn(): Promise<void> {
 
     // 额度问题单独走专用提示 —— 它需要的是「换后端」而不是「重试」
     if (err instanceof JevError && err.quotaExhausted) {
-      setLed("err", "额度不足");
+      setLed("err", "status.quota");
       showQuotaModal(error);
       pushLog({
         turn: state.turn + 1, move: legal[0], top: 0, bottom: 0, median: 0, confidence: 0,
         latencyMs: Math.round(performance.now() - turnStart), tokens: 0,
-        reason: `额度不足：${error}`, coerced: false, belowThreshold: undefined, failed: true,
+        reason: t("over.quotaBody", { msg: error }),
+        coerced: false, belowThreshold: undefined, failed: true,
         request: requestBody, response: null, at,
       });
       return;
     }
 
-    setLed("err", "API 失败");
+    setLed("err", "status.apiFail");
 
     pushLog({
       turn: state.turn + 1, move: legal[0], top: 0, bottom: 0, median: 0, confidence: 0,
@@ -555,18 +629,18 @@ async function doTurn(): Promise<void> {
     });
 
     showOverlay(
-      "API 调用失败",
-      `${error}\n\n已按设置重试 ${store.api.retryMax === null ? "（无限）" : store.api.retryMax} 次仍未成功。`,
+      t("over.apiFail"),
+      store.api.retryMax === null ? t("over.failBodyInf", { msg: error }) : t("over.failBody", { msg: error, n: store.api.retryMax }),
       true,
       [
-        { label: "重试", fn: () => { hideOverlay(); void doTurn(); }, primary: true },
-        { label: "跳过这一手", fn: () => { hideOverlay(); state.busy = false; if (state.running) void doTurn(); } },
+        { label: t("over.retry"), fn: () => { hideOverlay(); void doTurn(); }, primary: true },
+        { label: t("over.skip"), fn: () => { hideOverlay(); state.busy = false; if (state.running) void doTurn(); } },
       ],
     );
     return;
   }
 
-  if (!move) { state.busy = false; setLed("err", "无可用移动"); return; }
+  if (!move) { state.busy = false; setLed("err", "status.noMoves"); return; }
 
   // 记忆：记录「动手前的局面 + 这一手」
   // moveTiles 是纯函数，不会改动 state.tiles，所以这里直接留引用即可
@@ -603,9 +677,9 @@ async function doTurn(): Promise<void> {
     state.costTotal += estimateCost(tokens);
     $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
     $("lat").textContent = `${latency.toFixed(0)}ms`;
-    renderDecision(answer, move, latency, tokens, note, coerced);
+    renderDecision(answer, move, latency, tokens, noteKey, coerced, noteParams);
   } else {
-    renderDecision(null, move, 0, 0, note, false);
+    renderDecision(null, move, 0, 0, noteKey, false, noteParams);
   }
 
   pushLog({
@@ -615,7 +689,7 @@ async function doTurn(): Promise<void> {
     median: answer ? median(Object.values(answer.probabilities)) : 0,
     confidence: answer?.confidence ?? 0,
     latencyMs: Math.round(latency), tokens,
-    reason: note, coerced, belowThreshold, failed: false,
+    reason: t(noteKey, noteParams), coerced, belowThreshold, failed: false,
     request: requestBody, response, at,
   });
 
@@ -626,7 +700,7 @@ async function doTurn(): Promise<void> {
     if (rest > 0) await wait(rest);
     if (state.running) void doTurn();
   } else {
-    setLed("", "已暂停");
+    setLed("", "status.paused");
   }
 }
 
@@ -640,7 +714,7 @@ function pushLog(row: TurnLog): void {
 
 function gameOver(): void {
   state.running = false;
-  setLed("", "游戏结束");
+  setLed("", "over.gameOver");
   syncRunButton();
   recordProgress();
   // 结束后立即落盘并标记 finished —— 刷新页面不该「续玩」一局已经结束的棋
@@ -655,11 +729,11 @@ function gameOver(): void {
     finished: true,
   });
   showOverlay(
-    "游戏结束",
-    `得分 ${state.score}　最大方块 ${maxTile(state.tiles) || 0}　共 ${state.turn} 回合\n` +
-      `历史最高分 ${state.best}　历史最大瓷砖 ${state.bestTile}`,
+    t("over.gameOver"),
+    `${t("over.stats", { score: state.score, max: maxTile(state.tiles) || 0, turn: state.turn })}\n` +
+      t("over.best", { best: state.best, bt: state.bestTile }),
     false,
-    [{ label: "再来一局", fn: () => { hideOverlay(); newGame(); }, primary: true }],
+    [{ label: t("over.again"), fn: () => { hideOverlay(); newGame(); }, primary: true }],
   );
 }
 
@@ -688,7 +762,7 @@ function applySession(s: Session): void {
   $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
   const last = state.history[state.history.length - 1];
   $("lat").textContent = last ? `${last.latencyMs}ms` : "—";
-  $("decision").innerHTML = `<div class="idle">已恢复上一局（第 ${state.turn} 手）</div>`;
+  renderDecisionIdle("decision.restored", { n: state.turn });
   $("dTurn").textContent = state.turn ? `#${state.turn}` : "";
   syncRunButton();
 }
@@ -722,7 +796,7 @@ function restoreSession(): boolean {
   }
 
   applySession(s);
-  setLed("", `已恢复上一局 · 第 ${s.turn} 手`);
+  setLed("", "salvage.restoredShort", { n: s.turn });
   return true;
 }
 
@@ -760,7 +834,7 @@ function newGame(): void {
   // 硬护栏：无论如何都不能留一个空棋盘给玩家 —— 那会让第一步直接判负。
   // 真走到这里说明上面出了问题，宁可多放一个也不能为零。
   if (state.tiles.length === 0) {
-    console.warn("[Jev×2048] 初始瓷砖放置失败，已兜底放置一个");
+    console.warn(t("dev.spawnFail"));
     state.tiles.push(
       makeTile(g.spawnMin, Math.floor(Math.random() * ROWS), Math.floor(Math.random() * COLS)),
     );
@@ -783,11 +857,11 @@ function newGame(): void {
 
   $("cost").textContent = "$0";
   $("lat").textContent = "—";
-  $("decision").innerHTML = '<div class="idle">尚未开始</div>';
+  renderDecisionIdle("decision.idle");
   $("dTurn").textContent = "";
   $("fb").classList.remove("on");
   syncRunButton();
-  setLed("", "就绪");
+  setLed("", "status.ready");
   fitBoard();
   fitChart();
 }
@@ -806,9 +880,10 @@ function placeInitialTiles(): void {
   const cap = COLS * ROWS;               // 不可能超过格子总数
 
   for (let i = 0; i < Math.min(count, cap); i++) {
-    const t = spawnTile(state.tiles, g.spawnMin, g.spawnMax, g.spawnDist);
-    if (!t) break;                      // 盘面已满
-    state.tiles.push(t);
+    // 变量名刻意不叫 t —— 那会遮蔽从 i18n 导入的 t()
+    const tile = spawnTile(state.tiles, g.spawnMin, g.spawnMax, g.spawnDist);
+    if (!tile) break;                   // 盘面已满
+    state.tiles.push(tile);
   }
 }
 
@@ -822,15 +897,15 @@ function placeInitialTiles(): void {
 function syncRunButton(): void {
   const b = $<HTMLButtonElement>("bToggle");
   if (state.running) {
-    b.textContent = "⏸ 暂停";
+    b.textContent = t("ctrl.pause");
     b.classList.remove("primary");
     b.classList.add("running");
-    b.title = "暂停自动走棋（空格）";
+    b.title = t("ctrl.takeoverTitle");
   } else {
-    b.textContent = "▶ 让 Jev 接管";
+    b.textContent = t("ctrl.takeover");
     b.classList.remove("running");
     b.classList.add("primary");
-    b.title = "让 Jev 接管，自动走棋（空格）";
+    b.title = t("ctrl.takeoverTitle");
   }
   b.disabled = false;
 }
@@ -846,7 +921,7 @@ function start(): void {
 function pause(): void {
   state.running = false;
   syncRunButton();
-  setLed("", "已暂停");
+  setLed("", "status.paused");
 }
 
 /** 单个按钮在「接管 / 暂停」之间切换 */
@@ -903,7 +978,7 @@ function renderLog(): void {
   const host = $("logList");
   const tag = $("logCount");
   const n = state.history.length;
-  tag.textContent = n ? `${n} 条` : "";
+  tag.textContent = n ? t("log.turnCount", { n }) : "";
 
   // 记下当前的展开项与滚动位置
   const openKeys = new Set<string>();
@@ -913,7 +988,7 @@ function renderLog(): void {
   const scrollTop = host.scrollTop;
 
   if (n === 0) {
-    host.innerHTML = `<div class="idle">还没有请求记录</div>`;
+    host.innerHTML = `<div class="idle">${t("log.empty")}</div>`;
     return;
   }
 
@@ -928,7 +1003,7 @@ function renderLog(): void {
       const tm = r.at.slice(11, 19);
       const cls = r.failed ? "lg err" : r.coerced ? "lg warn" : "lg";
       const head = r.failed
-        ? `<span class="lgmove err">失败</span>`
+        ? `<span class="lgmove err">${t("log.failed")}</span>`
         : `<span class="lgmove">${ARROW[r.move]}</span>`;
       const probs = r.failed
         ? ""
@@ -943,16 +1018,16 @@ function renderLog(): void {
           <span class="lgmeta">${r.latencyMs}ms · ${r.tokens}tok · ${tm}</span>
         </summary>
         <div class="lgbody">
-          <div class="lgrow"><span>决策依据</span><code>${escapeHtml(r.reason)}</code></div>
+          <div class="lgrow"><span>${t("log.reason")}</span><code>${escapeHtml(r.reason)}</code></div>
           <div class="lgbtns">
-            <button data-copy="req" data-k="${escapeHtml(key)}">复制请求</button>
-            <button data-copy="res" data-k="${escapeHtml(key)}">复制响应</button>
-            <button data-copy="both" data-k="${escapeHtml(key)}">复制完整调用</button>
+            <button data-copy="req" data-k="${escapeHtml(key)}">${t("log.copyReq")}</button>
+            <button data-copy="res" data-k="${escapeHtml(key)}">${t("log.copyRes")}</button>
+            <button data-copy="both" data-k="${escapeHtml(key)}">${t("log.copyBoth")}</button>
           </div>
-          <div class="lglabel">请求 request</div>
+          <div class="lglabel">${t("log.reqLabel")}</div>
           <pre>${escapeHtml(fmtJson(r.request))}</pre>
-          <div class="lglabel">响应 response</div>
-          <pre>${r.response ? escapeHtml(fmtJson(r.response)) : "（无 —— 本次调用失败）"}</pre>
+          <div class="lglabel">${t("log.resLabel")}</div>
+          t("log.noResponse")
         </div>
       </details>`;
     })
@@ -961,7 +1036,7 @@ function renderLog(): void {
   if (paged.length < n) {
     host.insertAdjacentHTML(
       "beforeend",
-      `<div class="lghint">仅显示最近 ${LOG_PAGE_SIZE} 条，更早的可用「复制全部」导出</div>`,
+      `<div class="lghint">${t("log.pagedNote", { n: LOG_PAGE_SIZE })}</div>`,
     );
   }
 
@@ -991,7 +1066,7 @@ async function copyText(text: string, btn: HTMLButtonElement): Promise<void> {
   const old = btn.textContent;
   try {
     await navigator.clipboard.writeText(text);
-    btn.textContent = "已复制 ✓";
+    btn.textContent = t("toast.copied");
   } catch {
     // 非安全上下文（file:// 或 http 内网）没有 clipboard API，退回 execCommand
     const ta = document.createElement("textarea");
@@ -1001,7 +1076,7 @@ async function copyText(text: string, btn: HTMLButtonElement): Promise<void> {
     ta.select();
     const ok = document.execCommand("copy");
     ta.remove();
-    btn.textContent = ok ? "已复制 ✓" : "复制失败";
+    btn.textContent = ok ? t("toast.copied") : t("toast.copyFail");
   }
   setTimeout(() => { btn.textContent = old; }, 1200);
 }
@@ -1047,7 +1122,7 @@ function syncGameUi(): void {
   $<HTMLInputElement>("inpThreshold").value = String(Math.round(g.threshold * 100));
   $("thresholdVal").textContent = `${Math.round(g.threshold * 100)}%`;
   $<HTMLInputElement>("inpMemory").value = g.memory === null ? "max" : String(g.memory);
-  $("memoryVal").textContent = g.memory === null ? "最大" : String(g.memory);
+  $("memoryVal").textContent = g.memory === null ? t("strategy.max") : String(g.memory);
   $("thresholdRow").style.display = g.strategy === "threshold" ? "" : "none";
 }
 
@@ -1146,7 +1221,7 @@ function bindGameSettings(): void {
   // 记忆：滑块 + 「最大」按钮
   const mem = $<HTMLInputElement>("inpMemory");
   mem.addEventListener("input", () => {
-    $("memoryVal").textContent = mem.value === "max" ? "最大" : mem.value;
+    $("memoryVal").textContent = mem.value === "max" ? t("strategy.max") : mem.value;
   });
   mem.addEventListener("change", applyGameSettings);
   $("bMemMax").onclick = () => { mem.value = "max"; applyGameSettings(); };
@@ -1191,7 +1266,7 @@ function sessionSnapshot(): SessionInput | null {
 
 function doExport(kind: ArchiveKind, label: string): void {
   download(buildArchive(kind, store, sessionSnapshot(), state.history), label);
-  toast(`已导出${label}`);
+  toast(t("toast.exported", { label }));
 }
 
 /** 顶部短暂提示。导出/导入这类操作需要即时反馈，但不值得弹框。 */
@@ -1229,7 +1304,7 @@ function onFileChosen(e: Event): void {
 
   readFile(file)
     .then(handler)
-    .catch((err: unknown) => toast(`读取失败：${(err as Error).message}`, true));
+    .catch((err: unknown) => toast(t("toast.readFail", { msg: (err as Error).message }), true));
 }
 
 /**
@@ -1246,7 +1321,7 @@ function applyImported(text: string, expect: ArchiveKind): void {
     // 类型不匹配时给出明确提示，但仍允许 all 档写入任何一类
     if (archive.kind !== expect && archive.kind !== "all") {
       throw new ArchiveError(
-        `这是一份「${archive.kind}」档案，不能导入到「${expect}」位置`,
+        t("toast.kindMismatch", { from: t(`kind.${archive.kind}`), to: expect }),
       );
     }
 
@@ -1260,26 +1335,26 @@ function applyImported(text: string, expect: ArchiveKind): void {
         if (r.game.threshold !== undefined) store.game.threshold = r.game.threshold;
         if (r.game.memory !== undefined) store.game.memory = r.game.memory;
       }
-      touched.push("游戏设置");
+      touched.push(t("field.gameSettings"));
     }
     if (r.context) {
       Object.assign(store.context, r.context);
       $<HTMLTextAreaElement>("ruleDesc").value = store.context.ruleDesc;
       $<HTMLTextAreaElement>("hintText").value = store.context.strategyHint;
       $<HTMLInputElement>("inpCons").checked = store.context.consequences;
-      touched.push("上下文");
+      touched.push(t("field.context"));
     }
     if (r.api) {
       Object.assign(store.api, r.api);
-      touched.push("API 设置");
+      touched.push(t("field.apiSettings"));
     }
     if (r.highScores) {
       store.highScores = { ...store.highScores, ...r.highScores };
-      touched.push("历史最高分");
+      touched.push(t("field.highScores"));
     }
     if (r.bestTiles) {
       store.bestTiles = { ...store.bestTiles, ...r.bestTiles };
-      touched.push("历史最大瓷砖");
+      touched.push(t("field.bestTiles"));
     }
 
     save(store);
@@ -1322,13 +1397,13 @@ function applyImported(text: string, expect: ArchiveKind): void {
         savedAt: "",
       });
       persist();
-      touched.push(`对局（第 ${state.turn} 手）`);
+      touched.push(t("field.gameAtTurn", { n: state.turn }));
     }
 
     closeDrawers();
-    toast(touched.length ? `已导入：${touched.join("、")}` : "档案为空，未做改动");
+    toast(touched.length ? t("toast.imported", { list: touched.join(", ") }) : t("toast.importEmpty"));
   } catch (err) {
-    toast(`导入失败：${(err as Error).message}`, true);
+    toast(t("toast.importFail", { msg: (err as Error).message }), true);
   }
 }
 
@@ -1343,7 +1418,7 @@ function applyImported(text: string, expect: ArchiveKind): void {
 function showQuotaModal(detail: string): void {
   $("quotaDetail").textContent = detail;
   $("quotaModal").classList.add("show");
-  setLed("err", "额度不足");
+  setLed("err", "status.quota");
 }
 
 function bindQuotaModal(): void {
@@ -1353,7 +1428,7 @@ function bindQuotaModal(): void {
   };
   $("bQuotaClose").onclick = () => {
     $("quotaModal").classList.remove("show");
-    setLed("", "已暂停");
+    setLed("", "status.paused");
   };
 }
 
@@ -1371,18 +1446,18 @@ function showIncompatibleModal(raw: string, reason: string): void {
   $("incompatSize").textContent = `${(raw.length / 1024).toFixed(1)} KB`;
   $("incompatPreview").textContent = raw.slice(0, 400) + (raw.length > 400 ? "\n…" : "");
   modal.classList.add("show");
-  setLed("err", "发现不兼容的旧存档");
+  setLed("err", "incompat.title");
 }
 
 function bindIncompatibleModal(): void {
   $("bIncompatExport").onclick = () => {
     const raw = rawSession();
     if (!raw) {
-      toast("原始数据已不存在", true);
+      toast(t("salvage.rawGone"), true);
       return;
     }
     downloadRaw(raw, "incompatible-session");
-    toast("已导出旧数据");
+    toast(t("salvage.exported"));
   };
 
   /**
@@ -1394,13 +1469,13 @@ function bindIncompatibleModal(): void {
   $("bIncompatForce").onclick = () => {
     const raw = rawSession();
     if (!raw) {
-      toast("原始数据已不存在", true);
+      toast(t("salvage.rawGone"), true);
       return;
     }
 
     const r = forceLoadSession(raw);
     if (!r) {
-      toast("无法强行加载：数据里没有可用的棋盘", true);
+      toast(t("salvage.forceFail"), true);
       return;
     }
 
@@ -1417,27 +1492,27 @@ function bindIncompatibleModal(): void {
     commitForced({ ...r.session, cols: COLS, rows: ROWS });
     $("incompatModal").classList.remove("show");
 
-    setLed("on", `已强行加载 · 第 ${r.session.turn} 手`);
+    setLed("on", "salvage.forced", { n: r.session.turn });
     toast(
       r.salvaged.length
-        ? `已强行加载。注意：${r.salvaged.join("；")}`
-        : `已强行加载上一局（第 ${r.session.turn} 手）`,
+        ? t("salvage.forcedPartial", { list: r.salvaged.join("; ") })
+        : t("salvage.forcedShort", { n: r.session.turn }),
     );
   };
 
   $("bIncompatReset").onclick = () => {
-    if (!window.confirm("重置回默认？\n旧存档将被清除且无法恢复（建议先导出）。")) return;
+    if (!window.confirm(t("confirm.incompatReset"))) return;
     clearSession();
     $("incompatModal").classList.remove("show");
     newGame();
-    setLed("", "已重置");
-    toast("已重置回默认");
+    setLed("", "confirm.resetDone");
+    toast(t("confirm.resetDone"));
   };
 
   // 关掉弹框 = 先不动数据，开新局继续玩（存档原样留着）
   $("bIncompatLater").onclick = () => {
     $("incompatModal").classList.remove("show");
-    setLed("", "旧存档已保留，未做处理");
+    setLed("", "confirm.kept");
   };
 }
 
@@ -1526,10 +1601,11 @@ const inpKey = $<HTMLInputElement>("inpKey");
  */
 function updateBackendLabel(): void {
   const b = BACKENDS[state.cfg.provider];
-  const label = b.needsKey || !staticHost ? b.label : `${b.label}（远端）`;
+  const name = t(b.labelKey);
+  const label = b.needsKey || !staticHost ? name : t("backend.remoteSuffix", { label: name });
   const el = $("backend");
   el.textContent = `${label} · ${state.cfg.model}`;
-  el.title = `当前后端：${label}\n模型：${state.cfg.model}`;
+  el.title = t("backend.currentTitle", { label, model: state.cfg.model });
 }
 
 /** 把某个后端的默认地址填进 Base URL（那是个真值，留空没意义） */
@@ -1555,7 +1631,7 @@ function fillModelField(b: BackendConfig, current: string): void {
   const el = $<HTMLInputElement>("inpModel");
   if (b.managed) {
     el.value = "";
-    el.placeholder = "由本站指定";
+    el.placeholder = t("backend.modelManaged");
     el.disabled = true;
     return;
   }
@@ -1571,22 +1647,25 @@ function applyBackendGating(b: BackendConfig): void {
   $("advancedApi").style.display = b.managed ? "none" : "";
 
   $("modelHint").textContent = b.managed
-    ? "由本站服务端决定，无需也无法修改"
-    : `留空即用该后端的默认模型（${b.model}）`;
+    ? t("backend.modelManagedHint")
+    : t("backend.modelPlaceholder", { model: b.model });
 
-  $("backendNote").textContent = b.verified || !b.needsKey
-    ? (b.verified && b.needsKey ? "✅ 已验证可用。" : "") + (b.needsKey ? b.note : "")
-    : "⚠ 未经实测验证。" + b.note;
+  // 说明文字 = 「已实测可用 / 未经实测」+ 该后端的描述（描述本身也走 i18n）
+  const note = t(b.noteKey);
+  $("backendNote").textContent =
+    b.verified || !b.needsKey
+      ? (b.verified && b.needsKey ? t("backend.verifiedOk") : "") + (b.needsKey ? note : "")
+      : t("backend.unverified") + note;
   $("backendNote").style.display = $("backendNote").textContent ? "" : "none";
 
   if (b.needsKey) {
     inpKey.disabled = false;
-    inpKey.placeholder = "粘贴你的 API Key（仅存内存，刷新即清除）";
+    inpKey.placeholder = t("backend.keyPlaceholder");
     inpKey.style.userSelect = "auto";
   } else {
     inpKey.disabled = true;
     inpKey.value = "";
-    inpKey.placeholder = "无需填写 —— 开箱即用";
+    inpKey.placeholder = t("backend.noKeyPlaceholder");
     inpKey.style.userSelect = "none";
   }
 }
@@ -1632,12 +1711,12 @@ function syncApiUi(): void {
 
 function previewBackoff(max: number | null, base: number): string {
   const n = max === null ? 5 : Math.min(max, 5);
-  if (n === 0) return "不重试";
+  if (n === 0) return t("retry.none");
   const parts: string[] = [];
   for (let i = 0; i < n; i++) {
     parts.push(`${((base * Math.pow(2, i)) / 1000).toFixed(1)}s`);
   }
-  return `等待序列：${parts.join(" → ")}${max === null || max > 5 ? " → …" : ""}`;
+  return t("retry.sequence", { seq: parts.join(" → ") }) + (max === null || max > 5 ? " → …" : "");
 }
 
 function applyApiSettings(): void {
@@ -1661,7 +1740,7 @@ function saveApi(): void {
     // 仅存内存，绝不落盘
     apiKey: b.needsKey ? inpKey.value.trim() : "",
   };
-  $("backend").textContent = `${b.label} · ${state.cfg.model}`;
+  $("backend").textContent = `${t(b.labelKey)} · ${state.cfg.model}`;
   closeDrawers();
 }
 
@@ -1675,7 +1754,7 @@ const paceVal = $("paceVal");
  * 只影响自动走棋的播放速度。所以只在棋盘下方留一个滑块，设置抽屉里不重复出现。
  */
 function paceLabel(ms: number): string {
-  return ms === 0 ? "最快" : `${(ms / 1000).toFixed(1)}s`;
+  return ms === 0 ? t("pace.instant") : `${(ms / 1000).toFixed(1)}s`;
 }
 
 function syncPaceUi(): void {
@@ -1701,11 +1780,11 @@ $("bApi").onclick = () => { onApiDrawerOpen(); openDrawer("dApi"); };
 $("bLog").onclick = () => { renderLog(); openDrawer("dLog"); };
 
 /* 导入导出 */
-$("bExpGame").onclick = () => doExport("game", "对局");
-$("bExpStrategy").onclick = () => doExport("strategy", "策略");
-$("bExpApi").onclick = () => doExport("api", "API 设置");
-$("bExpLog").onclick = () => doExport("log", "日志");
-$("bExpAll").onclick = () => doExport("all", "全部");
+$("bExpGame").onclick = () => doExport("game", t("kind.game"));
+$("bExpStrategy").onclick = () => doExport("strategy", t("kind.strategy"));
+$("bExpApi").onclick = () => doExport("api", t("kind.api"));
+$("bExpLog").onclick = () => doExport("log", t("kind.log"));
+$("bExpAll").onclick = () => doExport("all", t("kind.all"));
 
 $("bImpGame").onclick = () => pickFile((t) => applyImported(t, "game"));
 $("bImpStrategy").onclick = () => pickFile((t) => applyImported(t, "strategy"));
@@ -1715,7 +1794,7 @@ $("fileInput").addEventListener("change", onFileChosen);
 
 $("bArchiveWipe").onclick = () =>
   confirmAction(
-    "清空全部本地存档？\n（设置、历史最高分、当前对局与调用日志都会被清除，且无法恢复）",
+    t("confirm.wipeAll"),
     () => {
       clearSession();
       try {
@@ -1731,27 +1810,27 @@ bindIncompatibleModal();
 bindQuotaModal();
 $("bSaveApi").onclick = saveApi;
 $("bGameReset").onclick = () =>
-  confirmAction("恢复游戏的默认设置？\n（棋盘尺寸、新方块区间、动效都会回到出厂值；历史最高分保留）", () => {
+  confirmAction(t("confirm.gameReset"), () => {
     resetGameSettings();
   });
 $("bStrategyReset").onclick = () =>
-  confirmAction("恢复策略的默认设置？\n（上下文文本、后果预测、记忆、决策策略、阈值都会回到出厂值）", () => {
+  confirmAction(t("confirm.strategyReset"), () => {
     resetStrategySettings();
   });
 $("bScoreReset").onclick = () =>
   confirmAction(
-    "重置所有历史最高分与最大瓷砖？\n（各棋盘尺寸的纪录都会被清空，当前对局不受影响）",
+    t("confirm.scoreReset"),
     () => {
       resetScores();
-      toast("已重置最高分");
+      toast(t("confirm.scoresReset"));
     },
   );
 $("bApiReset").onclick = () =>
-  confirmAction("恢复 API 的默认设置？\n（自动重试参数回到出厂值；后端与密钥不受影响）", () => {
+  confirmAction(t("confirm.apiReset"), () => {
     resetApiSettings();
   });
 $("bLogClear").onclick = () =>
-  confirmAction("清空全部调用日志？此操作不可撤销。", () => {
+  confirmAction(t("confirm.logClear"), () => {
     state.history = [];
     chart.clear();
     renderLog();
@@ -1800,7 +1879,8 @@ for (const [id, b] of Object.entries(BACKENDS)) {
   const o = document.createElement("option");
   o.value = id;
   // 开箱即用的后端不加「已验证」标记 —— 那是在暗示它背后有可验证的第三方服务
-  o.textContent = b.needsKey ? `${b.label}${b.verified ? " ✓" : " (未验证)"}` : b.label;
+  const name = t(b.labelKey);
+  o.textContent = b.needsKey ? `${name}${b.verified ? " ✓" : t("backend.unverifiedTag")}` : name;
   selBackend.appendChild(o);
 }
 
@@ -1808,10 +1888,10 @@ const served = location.protocol === "http:" || location.protocol === "https:";
 const staticHost = isStaticHosting();
 if (served) {
   state.cfg = { provider: "localproxy", base: BACKENDS.localproxy.base, model: BACKENDS.localproxy.model, apiKey: "" };
-  setLed("", "就绪");
+  setLed("", "status.ready");
 } else {
   state.cfg = { provider: "vercel", base: BACKENDS.vercel.base, model: BACKENDS.vercel.model, apiKey: "" };
-  setLed("", "请在 API 中配置");
+  setLed("", "backend.needConfig");
 }
 selBackend.value = state.cfg.provider;
 fillBackendDefaults(state.cfg.provider);
@@ -1825,6 +1905,39 @@ updateBackendLabel();
  * 表现为「棋盘空白、点一下就判负」这种与根因毫不相干的症状。
  * 真出问题时，至少要把它显式地报出来，而不是留一个空棋盘让玩家猜。
  */
+/**
+ * 按当前语言重画**全部**文案。
+ *
+ * 静态文案由 applyDom() 扫描 `data-i18n*` 属性搞定；但动态内容是各函数
+ * 一次性写进 DOM 的，必须逐个重放 —— 尤其是决策面板与状态栏，它们
+ * 除了这份缓存没有别的途径能恢复内容（见 lastDecision / lastLed）。
+ */
+function relanguage(): void {
+  applyDom();
+
+  if (lastLed) setLed(lastLed.cls, lastLed.key, lastLed.params);
+  if (lastDecision) {
+    const d = lastDecision;
+    renderDecision(d.answer, d.move, d.latency, d.tokens, d.noteKey, d.coerced, d.noteParams);
+  }
+
+  syncGameUi();
+  syncRunButton();
+  syncApiUi();
+  syncPaceUi();
+  renderLog();
+  updateBackendLabel();
+  applyBackendGating(BACKENDS[state.cfg.provider]);
+}
+
+/** 顶栏的语言按钮：zh ↔ en 对切。标签由 applyDom 按 data-i18n 自动更新。 */
+function bindLanguage(): void {
+  $("bLang").addEventListener("click", () => {
+    const next: Lang = getLang() === "zh" ? "en" : "zh";
+    setLang(next);
+  });
+}
+
 function boot(): void {
   // 先把所有必需的 id 一次性核对完，缺哪个直接说清楚
   assertDom([
@@ -1844,7 +1957,20 @@ function boot(): void {
     "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
     "advancedApi", "modelHint",
     "logList", "logCount", "bCopyAll", "bLogClear",
+    "bLang", "langLbl",
   ]);
+
+  // 语言：先套用已保存的选择，绑定切换按钮，再订阅「切换后重绘」。
+  // setLang 只在值真的变了才广播，所以这里的首次套用不会触发重绘，
+  // 随后的 applyDom() 负责把静态文案刷成当前语言。
+  setLang(store.lang);
+  bindLanguage();
+  onLangChange(() => {
+    store.lang = getLang();
+    save(store);
+    relanguage();
+  });
+  applyDom();
 
   setBoardSize(store.lastWidth, store.lastHeight);
   renderer.animations = store.game.animations;
@@ -1865,8 +1991,8 @@ function boot(): void {
 try {
   boot();
 } catch (err) {
-  console.error("[Jev×2048] 启动失败：", err);
-  setLed("err", "启动失败");
+  console.error(t("dev.bootFail"), err);
+  setLed("err", "boot.failed");
   const msg = err instanceof Error ? err.message : String(err);
   // 用最朴素的方式报错 —— 此时弹框、抽屉这些依赖可能本身就不可用
   const box = document.createElement("div");
@@ -1874,13 +2000,17 @@ try {
     "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;" +
     "background:#0a0a0a;z-index:9999;padding:24px;text-align:center;" +
     "font:13px/1.7 ui-monospace,monospace;color:#f5b5b5;white-space:pre-wrap";
-  box.textContent = `启动失败\n\n${msg}\n\n请把这条信息报告给开发者。`;
+  box.textContent = t("boot.failedBody", { msg });
   document.body.appendChild(box);
 }
-for (const t of [60, 200, 500]) setTimeout(() => { fitBoard(); fitChart(); }, t);
+for (const delay of [60, 200, 500]) setTimeout(() => { fitBoard(); fitChart(); }, delay);
 
 void DEFAULT_RETRY; // 保留默认值导出，供外部引用
 console.info(
-  `[Jev×2048] 棋盘 ${COLS}×${ROWS}　生成 ${store.game.spawnMin}–${store.game.spawnMax} (${store.game.spawnDist})` +
-    `　记忆 ${store.game.memory === null ? "最大" : store.game.memory}　阈值 ${store.game.threshold}`,
+  t("dev.bootInfo", {
+    cols: COLS, rows: ROWS,
+    min: store.game.spawnMin, max: store.game.spawnMax, dist: store.game.spawnDist,
+    mem: store.game.memory === null ? t("dev.memMax") : store.game.memory,
+    th: store.game.threshold,
+  }),
 );

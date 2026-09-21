@@ -23,6 +23,11 @@ import {
   type Persisted,
 } from "../client/config.js";
 import type { SessionInput } from "../client/session.js";
+import { setLang } from "../client/i18n.js";
+
+// 下面有几处断言直接匹配**中文**错误文案，这里显式固定语言。
+// 否则一旦默认语言改成跟随浏览器（英文环境），断言会莫名其妙地失败。
+setLang("zh");
 
 function makeStore(): Persisted {
   return {
@@ -36,6 +41,7 @@ function makeStore(): Persisted {
     },
     context: { ...DEFAULT_CONTEXT, ruleDesc: "测试规则", strategyHint: "测试提示", consequences: false },
     api: { retryMax: 5, retryBaseMs: 1200 },
+    lang: "zh",
     highScores: { "4x4": 100, "6x5": 250 },
     bestTiles: { "4x4": 64, "6x5": 128 },
     lastWidth: 6,

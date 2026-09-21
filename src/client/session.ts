@@ -12,6 +12,7 @@
  *   session → 当前这一局（棋盘、分数、轮次、记忆、调用日志）
  */
 import type { MemoryEntry, Tile, TurnLog } from "../shared/types.js";
+import { t } from "./i18n.js";
 
 const KEY = "jev2048.session.v1";
 const SAVE_DEBOUNCE_MS = 300;
@@ -74,11 +75,11 @@ export function loadSession(): LoadResult {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return { status: "incompatible", raw, reason: "存档内容不是一个对象" };
+      return { status: "incompatible", raw, reason: t("sesserr.notObject") };
     }
     o = parsed as Record<string, unknown>;
   } catch {
-    return { status: "incompatible", raw, reason: "存档不是合法 JSON（可能已损坏）" };
+    return { status: "incompatible", raw, reason: t("sesserr.badJson") };
   }
 
   // 版本比当前新 —— 是「降级运行」，读下去可能丢字段，明确报不兼容
@@ -87,18 +88,18 @@ export function loadSession(): LoadResult {
     return {
       status: "incompatible",
       raw,
-      reason: `存档版本 v${v} 高于当前支持的 v${SESSION_VERSION}`,
+      reason: t("sesserr.versionHigh", { v, cur: SESSION_VERSION }),
     };
   }
 
   // 结构校验：核心字段缺一不可
   const bad = (why: string): LoadResult => ({ status: "incompatible", raw, reason: why });
   if (typeof o.cols !== "number" || typeof o.rows !== "number") {
-    return bad("存档缺少棋盘宽高");
+    return bad(t("sesserr.noSize"));
   }
-  if (!Array.isArray(o.tiles)) return bad("存档的方块列表已损坏");
-  if (typeof o.score !== "number") return bad("存档缺少分数");
-  if (typeof o.turn !== "number") return bad("存档缺少轮次");
+  if (!Array.isArray(o.tiles)) return bad(t("sesserr.badTiles"));
+  if (typeof o.score !== "number") return bad(t("sesserr.noScore"));
+  if (typeof o.turn !== "number") return bad(t("sesserr.noTurn"));
 
   const tiles = (o.tiles as Tile[]).filter(
     (t) =>
@@ -109,7 +110,7 @@ export function loadSession(): LoadResult {
       typeof t.col === "number",
   );
   if (tiles.length !== (o.tiles as Tile[]).length) {
-    return bad("存档里有结构不完整的方块");
+    return bad(t("sesserr.badTile"));
   }
 
   return {
@@ -229,7 +230,7 @@ export function forceLoadSession(raw: string): { session: Session; salvaged: str
   );
   if (tiles.length === 0) return null;         // 没有方块就没有可续玩的局面
   if (tiles.length !== rawTiles.length) {
-    salvaged.push(`方块 ${rawTiles.length - tiles.length} 个损坏已丢弃`);
+    salvaged.push(t("salv.tilesDropped", { n: rawTiles.length - tiles.length }));
   }
 
   const num = (v: unknown, d: number): number => {
@@ -245,15 +246,15 @@ export function forceLoadSession(raw: string): { session: Session; salvaged: str
   const turn = num(r.turn, 0);
 
   if (!Number.isFinite(Number(r.cols)) && !Number.isFinite(Number(r.size))) {
-    salvaged.push("棋盘宽高已用默认值 4×4");
+    salvaged.push(t("salv.size"));
   }
-  if (!Number.isFinite(Number(r.score))) salvaged.push("分数已归零");
-  if (!Number.isFinite(Number(r.turn))) salvaged.push("轮次已归零");
+  if (!Number.isFinite(Number(r.score))) salvaged.push(t("salv.score"));
+  if (!Number.isFinite(Number(r.turn))) salvaged.push(t("salv.turn"));
 
   const memory = Array.isArray(r.memory) ? (r.memory as MemoryEntry[]) : [];
   const history = Array.isArray(r.history) ? (r.history as TurnLog[]) : [];
-  if (!Array.isArray(r.memory)) salvaged.push("记忆已清空");
-  if (!Array.isArray(r.history)) salvaged.push("调用日志已清空");
+  if (!Array.isArray(r.memory)) salvaged.push(t("salv.memory"));
+  if (!Array.isArray(r.history)) salvaged.push(t("salv.log"));
 
   return {
     session: {

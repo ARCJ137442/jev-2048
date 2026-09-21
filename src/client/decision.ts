@@ -11,13 +11,22 @@
  * 当最高概率低于该值时，本回合**暂停并标记**，交由用户处置。
  */
 import type { ChoiceAnswer, Direction } from "../shared/types.js";
+import { t } from "./i18n.js";
 
 export type Strategy = "greedy" | "sample" | "threshold";
 
 export interface Resolution {
   move: Direction;
-  /** 人类可读的决策依据 */
+  /** 人类可读的决策依据（已按当前界面语言翻译） */
   reason: string;
+  /**
+   * `reason` 对应的词条 key 与参数。
+   *
+   * 界面切换语言时，决策面板要按新语言重画 —— 面板是「一次性画好」的，
+   * 只有拿得到 key 才能重新翻译，否则会留下上一门语言的残留。
+   */
+  reasonKey: string;
+  reasonParams?: Record<string, string | number>;
   /** Jev 首选非法、退而取其分布内的次优合法方向 */
   coerced: boolean;
   /** 最高概率低于用户设定的阈值（仅在 threshold 策略下可能为真） */
@@ -56,11 +65,17 @@ export function resolveDecision(
   threshold: number,
 ): Resolution {
   const ranked = rankProbabilities(answer);
+  /** 同时给出译文与 key —— 译文供当前渲染，key 供日后重新翻译 */
+  const mk = (key: string, params?: Record<string, string | number>) => ({
+    reason: t(key, params),
+    reasonKey: key,
+    reasonParams: params,
+  });
 
   if (ranked.length === 0) {
     return {
       move: legal[0],
-      reason: "响应中没有概率分布，取首个合法方向",
+      ...mk("reason.noProb"),
       coerced: true,
       belowThreshold: false,
     };
@@ -79,10 +94,10 @@ export function resolveDecision(
       for (const [move, p] of pool) {
         r -= p;
         if (r <= 0) {
-          return { move, reason: "按分布采样", coerced: move !== topMove, belowThreshold };
+          return { move, ...mk("reason.sampled"), coerced: move !== topMove, belowThreshold };
         }
       }
-      return { move: pool[0][0], reason: "按分布采样", coerced: false, belowThreshold };
+      return { move: pool[0][0], ...mk("reason.sampled"), coerced: false, belowThreshold };
     }
   }
 
@@ -90,9 +105,12 @@ export function resolveDecision(
   if (legalSet.has(topMove)) {
     return {
       move: topMove,
-      reason: belowThreshold
-        ? `Jev 仅 ${(topProb * 100).toFixed(0)}%，低于阈值 ${(threshold * 100).toFixed(0)}%`
-        : "取最高概率",
+      ...(belowThreshold
+        ? mk("reason.belowThreshold", {
+            p: (topProb * 100).toFixed(0),
+            t: (threshold * 100).toFixed(0),
+          })
+        : mk("reason.takeTop")),
       coerced: false,
       belowThreshold,
     };
@@ -103,7 +121,7 @@ export function resolveDecision(
   if (alt) {
     return {
       move: alt.move,
-      reason: `Jev 首选 ${topMove} 非法，取其分布内次优合法方向`,
+      ...mk("reason.coerced", { move: t(`dir.${topMove}`) }),
       coerced: true,
       belowThreshold,
     };
@@ -111,7 +129,7 @@ export function resolveDecision(
 
   return {
     move: legal[0],
-    reason: "模型分布中无合法方向，取首个合法方向",
+    ...mk("reason.noLegal"),
     coerced: true,
     belowThreshold,
   };

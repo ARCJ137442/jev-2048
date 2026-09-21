@@ -11,6 +11,7 @@
  * 不匹配就明确报错而不是半途写坏状态。
  */
 import type { TurnLog } from "../shared/types.js";
+import { t } from "./i18n.js";
 import {
   DEFAULT_API,
   DEFAULT_CONTEXT,
@@ -186,25 +187,25 @@ export function parseArchive(text: string): Archive {
   try {
     o = JSON.parse(text);
   } catch {
-    throw new ArchiveError("不是合法的 JSON 文件");
+    throw new ArchiveError(t("arcerr.badJson"));
   }
-  if (!isObj(o)) throw new ArchiveError("档案内容不是一个对象");
-  if (o.app !== "jev2048") throw new ArchiveError("这不像是本应用的存档（缺少 app 标记）");
+  if (!isObj(o)) throw new ArchiveError(t("arcerr.notObject"));
+  if (o.app !== "jev2048") throw new ArchiveError(t("arcerr.notOurs"));
 
   const v = Number(o.v);
-  if (!Number.isFinite(v)) throw new ArchiveError("档案缺少版本号");
+  if (!Number.isFinite(v)) throw new ArchiveError(t("arcerr.noVersion"));
   if (v > ARCHIVE_VERSION) {
     throw new ArchiveError(
-      `档案版本 v${v} 高于当前支持的 v${ARCHIVE_VERSION}，请升级应用后再导入`,
+      t("arcerr.versionHigh", { v, cur: ARCHIVE_VERSION }),
     );
   }
 
   const kinds: ArchiveKind[] = ["game", "strategy", "api", "log", "all"];
   if (!kinds.includes(o.kind as ArchiveKind)) {
-    throw new ArchiveError(`未知的档案类型：${String(o.kind)}`);
+    throw new ArchiveError(t("arcerr.unknownKind", { kind: String(o.kind) }));
   }
   if (!("payload" in o) || !isObj(o.payload)) {
-    throw new ArchiveError("档案缺少 payload");
+    throw new ArchiveError(t("arcerr.noPayload"));
   }
 
   return o as unknown as Archive;
@@ -278,7 +279,7 @@ export function extract(archive: Archive): ImportResult {
   }
 
   // log：只导出，导入时明确拒绝
-  throw new ArchiveError("日志档案不支持导入");
+  throw new ArchiveError(t("arcerr.logNoImport"));
 }
 
 /** 读取用户选中的文件 */
@@ -286,7 +287,7 @@ export function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(String(fr.result ?? ""));
-    fr.onerror = () => reject(new ArchiveError("读取文件失败"));
+    fr.onerror = () => reject(new ArchiveError(t("arcerr.readFail")));
     fr.readAsText(file);
   });
 }

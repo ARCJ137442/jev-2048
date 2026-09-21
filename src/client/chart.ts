@@ -7,6 +7,7 @@
  * 中线带点标出中位数走势。带状越窄 → Jev 越笃定。
  */
 import type { TurnLog } from "../shared/types.js";
+import { t } from "./i18n.js";
 
 const PAD_L = 4;
 const PAD_R = 4;
@@ -23,7 +24,7 @@ export class ConfidenceChart {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d", { alpha: true });
-    if (!ctx) throw new Error("无法获取 2D 绘图上下文");
+    if (!ctx) throw new Error(t("err.noCanvas"));
     this.ctx = ctx;
   }
 
@@ -104,7 +105,7 @@ export class ConfidenceChart {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = "10px system-ui, sans-serif";
-      ctx.fillText("等待对局数据", w / 2, h / 2);
+      ctx.fillText(t("chart.waiting"), w / 2, h / 2);
       return;
     }
 
