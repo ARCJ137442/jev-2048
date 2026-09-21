@@ -644,14 +644,15 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
 
     <div class="field">
-      <label data-i18n="game.spawnRange">新方块取值区间</label>
-      <div class="desc" data-i18n="game.spawnHint">只接受 2 的幂次。</div>
+      <label data-i18n="game.spawnRange">新方块取值区间（填 2 的指数）</label>
+      <div class="desc" data-i18n="game.spawnHint">填指数 n，实际取值是 2ⁿ —— 0 → 1、1 → 2、2 → 4，以此类推。</div>
       <div class="range2">
-        <input type="number" id="inpSpawnMin" min="2" max="4" step="2" placeholder="最小 2" data-i18n-ph="game.phMin2">
+        <input type="number" id="inpSpawnMin" min="0" step="1" placeholder="最小 0" data-i18n-ph="game.phSpawnMin">
         <span class="sep">~</span>
-        <input type="number" id="inpSpawnMax" min="2" max="4" step="2" placeholder="最大 4" data-i18n-ph="game.phMax4">
+        <input type="number" id="inpSpawnMax" min="0" step="1" placeholder="最大 2" data-i18n-ph="game.phSpawnMax">
       </div>
-      <div class="warnline" id="spawnWarn" data-i18n="game.spawnWarn">只能填 2 或 4，且上界不小于下界</div>
+      <div class="tinylbl" id="spawnPreview"></div>
+      <div class="warnline" id="spawnWarn" data-i18n="game.spawnWarn">指数需为非负整数，且上界不小于下界</div>
     </div>
 
     <div class="field">

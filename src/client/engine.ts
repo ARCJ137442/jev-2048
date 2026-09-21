@@ -14,7 +14,8 @@
 import {
   COLS,
   ROWS,
-  SPAWN_ALLOWED,
+  SPAWN_MIN_LIMIT,
+  SPAWN_MAX_LIMIT,
   type Direction,
   type Grid,
   type SpawnDist,
@@ -140,9 +141,13 @@ export function emptyCells(tiles: Tile[]): Array<{ row: number; col: number }> {
 
 /** 区间内可用的 2 的幂次（按值升序） */
 export function spawnCandidates(minV: number, maxV: number): number[] {
-  const lo = Math.max(minV, SPAWN_ALLOWED[0]);
-  const hi = Math.min(maxV, SPAWN_ALLOWED[SPAWN_ALLOWED.length - 1]);
-  return SPAWN_ALLOWED.filter((v) => v >= lo && v <= hi);
+  const lo = Math.max(minV, SPAWN_MIN_LIMIT);
+  const hi = Math.min(maxV, SPAWN_MAX_LIMIT);
+  const out: number[] = [];
+  for (let v = SPAWN_MIN_LIMIT; v <= hi; v *= 2) {
+    if (v >= lo) out.push(v);
+  }
+  return out;
 }
 
 /**
@@ -159,7 +164,7 @@ export function pickSpawnValue(
   rand: () => number = Math.random,
 ): number {
   const cands = spawnCandidates(minV, maxV);
-  if (cands.length === 0) return SPAWN_ALLOWED[0];
+  if (cands.length === 0) return SPAWN_MIN_LIMIT;
   if (cands.length === 1) return cands[0];
 
   if (dist === "weighted") {

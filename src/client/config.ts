@@ -7,7 +7,10 @@
 import {
   MAX_BOARD,
   MIN_BOARD,
-  SPAWN_ALLOWED,
+  SPAWN_MIN_LIMIT,
+  SPAWN_MAX_LIMIT,
+  spawnExpOf,
+  spawnValueOf,
   type SpawnDist,
 } from "../shared/types.js";
 import { detectLang, type Lang } from "./i18n.js";
@@ -152,12 +155,9 @@ export function clampBoardSize(v: unknown): number {
  */
 export function clampSpawn(v: unknown): number {
   const n = Math.round(Number(v));
-  if (!Number.isFinite(n)) return SPAWN_ALLOWED[0];
-  let best: number = SPAWN_ALLOWED[0];
-  for (const a of SPAWN_ALLOWED) {
-    if (Math.abs(a - n) < Math.abs(best - n)) best = a;
-  }
-  return best;
+  if (!Number.isFinite(n) || n < SPAWN_MIN_LIMIT) return SPAWN_MIN_LIMIT;
+  // 非 2 的幂次归到最近的那个（不抛错，配置面板要能容错）
+  return spawnValueOf(spawnExpOf(Math.min(n, SPAWN_MAX_LIMIT)));
 }
 
 /** 生成分布：只认 uniform / weighted；缺失时取默认（加权） */

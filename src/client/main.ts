@@ -6,7 +6,9 @@
 import {
   COLS,
   ROWS,
-  SPAWN_ALLOWED,
+  MAX_SPAWN_EXP,
+  spawnExpOf,
+  spawnValueOf,
   setBoardSize,
   type BackendConfig,
   type BackendId,
@@ -77,7 +79,6 @@ import {
   clampDist,
   clampInitial,
   clampPace,
-  clampSpawn,
   bestTileFor,
   highScoreFor,
   load,
@@ -1111,8 +1112,9 @@ function syncGameUi(): void {
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-size]")) {
     b.classList.toggle("on", Number(b.dataset.w) === g.boardWidth && Number(b.dataset.h) === g.boardHeight);
   }
-  $<HTMLInputElement>("inpSpawnMin").value = String(g.spawnMin);
-  $<HTMLInputElement>("inpSpawnMax").value = String(g.spawnMax);
+  $<HTMLInputElement>("inpSpawnMin").value = String(spawnExpOf(g.spawnMin));
+  $<HTMLInputElement>("inpSpawnMax").value = String(spawnExpOf(g.spawnMax));
+  updateSpawnPreview();
   $<HTMLSelectElement>("inpDist").value = g.spawnDist;
   $<HTMLInputElement>("inpInitMin").value = String(g.initialMin);
   $<HTMLInputElement>("inpInitMax").value = String(g.initialMax);
@@ -1128,8 +1130,9 @@ function syncGameUi(): void {
 
 function applyGameSettings(): void {
   const g = store.game;
-  const min = clampSpawn($<HTMLInputElement>("inpSpawnMin").value);
-  const max = clampSpawn($<HTMLInputElement>("inpSpawnMax").value);
+  // 界面填的是**指数**（0 → 1、1 → 2…），存储的仍是值本身
+  const min = spawnValueOf(Number($<HTMLInputElement>("inpSpawnMin").value));
+  const max = spawnValueOf(Number($<HTMLInputElement>("inpSpawnMax").value));
 
   g.spawnMin = min;
   g.spawnMax = Math.max(min, max);
@@ -1152,12 +1155,32 @@ function applyGameSettings(): void {
 }
 
 function validateSpawn(): boolean {
-  const minV = Math.round(Number($<HTMLInputElement>("inpSpawnMin").value));
-  const maxV = Math.round(Number($<HTMLInputElement>("inpSpawnMax").value));
-  const ok = (v: number): boolean => (SPAWN_ALLOWED as readonly number[]).includes(v);
-  const bad = !ok(minV) || !ok(maxV) || maxV < minV;
+  const minE = Number($<HTMLInputElement>("inpSpawnMin").value);
+  const maxE = Number($<HTMLInputElement>("inpSpawnMax").value);
+  // 界面填的是**指数**：必须是非负整数，且不超过 MAX_SPAWN_EXP
+  const ok = (e: number): boolean =>
+    Number.isInteger(e) && e >= 0 && e <= MAX_SPAWN_EXP;
+  const bad = !ok(minE) || !ok(maxE) || maxE < minE;
   $("spawnWarn").style.display = bad ? "block" : "none";
+  updateSpawnPreview();
   return !bad;
+}
+
+/**
+ * 新方块区间的「指数 → 值」预览，形如 `2^0 = 1 ~ 2^2 = 4`。
+ *
+ * 直接填值的话，玩家得自己算 2 的幂次、还得输入 1/2/4/8… 这种不成规律的串；
+ * 填指数则天然保证合法，代价就是得把这行换算结果摆在眼前。
+ */
+function updateSpawnPreview(): void {
+  const fmt = (raw: string): string => {
+    const e = Number(raw);
+    if (!Number.isInteger(e) || e < 0 || e > MAX_SPAWN_EXP) return "—";
+    return `2^${e} = ${spawnValueOf(e)}`;
+  };
+  $("spawnPreview").textContent =
+    `${fmt($<HTMLInputElement>("inpSpawnMin").value)} ~ ` +
+    `${fmt($<HTMLInputElement>("inpSpawnMax").value)}`;
 }
 
 /** 初始瓷砖个数：下限必须是 ≥1 的整数，且不得大于上限 */
@@ -1201,6 +1224,9 @@ function bindGameSettings(): void {
   const onSpawn = (): void => { if (validateSpawn()) applyGameSettings(); };
   $("inpSpawnMin").addEventListener("change", onSpawn);
   $("inpSpawnMax").addEventListener("change", onSpawn);
+  // 输入过程中就更新预览，不必等 change
+  $("inpSpawnMin").addEventListener("input", updateSpawnPreview);
+  $("inpSpawnMax").addEventListener("input", updateSpawnPreview);
 
   // 步进间隔不在这里 —— 它只由棋盘下方的滑块控制（见 syncPaceUi）
   for (const id of ["inpAnim", "inpParticles", "inpStrategy", "inpDist"]) {
@@ -1951,7 +1977,7 @@ function boot(): void {
     "bGameReset", "bScoreReset", "bStrategyReset", "bApiReset", "bArchiveWipe", "bLogClear", "bCopyAll",
     "ruleDesc", "hintText", "inpCons",
     "inpWidth", "inpHeight", "inpSpawnMin", "inpSpawnMax", "inpDist",
-    "inpInitMin", "inpInitMax", "spawnWarn", "initWarn", "inpAnim", "inpParticles",
+    "inpInitMin", "inpInitMax", "spawnWarn", "spawnPreview", "initWarn", "inpAnim", "inpParticles",
     "inpStrategy", "inpThreshold", "thresholdRow", "thresholdVal", "inpMemory",
     "memoryVal", "bMemMax", "selBackend", "inpKey", "inpBase", "inpModel",
     "inpRetryMax", "inpRetryBase", "retryPreview", "backendNote", "backend",
@@ -1971,6 +1997,10 @@ function boot(): void {
     relanguage();
   });
   applyDom();
+
+  // 指数输入框的上限跟着常量走，避免 HTML 里写死的数字与 MAX_SPAWN_EXP 脱节
+  $<HTMLInputElement>("inpSpawnMin").max = String(MAX_SPAWN_EXP);
+  $<HTMLInputElement>("inpSpawnMax").max = String(MAX_SPAWN_EXP);
 
   setBoardSize(store.lastWidth, store.lastHeight);
   renderer.animations = store.game.animations;

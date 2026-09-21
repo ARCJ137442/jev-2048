@@ -54,10 +54,34 @@ export function isPowerOfTwo(v: number): boolean {
    新方块生成
    ============================================================ */
 
-/** 生成值的允许范围：只接受 2 与 4 这两个幂次 */
-export const SPAWN_ALLOWED = [2, 4] as const;
-export const SPAWN_MIN_LIMIT = 2;
-export const SPAWN_MAX_LIMIT = 4;
+/**
+ * 生成值的允许范围：**2 的幂次**，从 2⁰ = 1 起，上不封顶到 {@link SPAWN_MAX_LIMIT}。
+ *
+ * 界面上以**指数**输入（0 → 1，1 → 2，2 → 4…），但存储与引擎之间交换的
+ * 始终是**值本身**。这样字段语义没有变，老存档才不会错位 —— 若改存指数，
+ * 旧档里的 `spawnMin: 2` 会被新代码读成 2² = 4，等于悄悄改了玩家的设置。
+ */
+export const SPAWN_MIN_LIMIT = 1;                  // 2^0
+/**
+ * 指数上限。
+ *
+ * 取 20（2^20 ≈ 104 万）：远超实际能玩到的量级，又离浮点精度问题很远。
+ * 再往上加没有实际意义 —— 棋盘上出现那么大的方块时游戏早就结束了。
+ */
+export const MAX_SPAWN_EXP = 20;
+export const SPAWN_MAX_LIMIT = 2 ** MAX_SPAWN_EXP;
+
+/** 值 → 指数。界面要显示「填几」时用它。 */
+export function spawnExpOf(value: number): number {
+  return Math.round(Math.log2(Math.max(SPAWN_MIN_LIMIT, value)));
+}
+
+/** 指数 → 值。界面拿到的输入转回存储语义时用它。越界会夹到合法区间。 */
+export function spawnValueOf(exp: number): number {
+  const e = Math.round(Number(exp));
+  if (!Number.isFinite(e)) return SPAWN_MIN_LIMIT;
+  return 2 ** Math.max(0, Math.min(MAX_SPAWN_EXP, e));
+}
 
 /**
  * 生成值的分布方式。

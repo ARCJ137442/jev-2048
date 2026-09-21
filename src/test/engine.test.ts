@@ -15,7 +15,8 @@ import assert from "node:assert/strict";
 import {
   COLS,
   ROWS,
-  SPAWN_ALLOWED,
+  SPAWN_MAX_LIMIT,
+  SPAWN_MIN_LIMIT,
   isPowerOfTwo,
   setBoardSize,
   type Direction,
@@ -545,29 +546,43 @@ test("isPowerOfTwo", () => {
   for (const v of [0, 3, 6, 7, 12, -2, 1.5]) assert.ok(!isPowerOfTwo(v), `${v} 不应为 2 的幂`);
 });
 
-test("pickSpawnValue：结果恒在允许集合 {2,4} 内", () => {
-  for (const [lo, hi] of [[2, 2], [2, 4], [4, 4], [1, 8]] as Array<[number, number]>) {
+test("pickSpawnValue：结果恒为 2 的幂次，且落在区间内", () => {
+  const ranges: Array<[number, number]> = [[1, 1], [1, 2], [2, 4], [1, 8], [4, 4], [8, 32]];
+  for (const [lo, hi] of ranges) {
     for (let i = 0; i < 300; i++) {
       const v = pickSpawnValue(lo, hi);
       assert.ok(isPowerOfTwo(v), `产生了非 2 的幂：${v}`);
-      assert.ok((SPAWN_ALLOWED as readonly number[]).includes(v), `${v} 不在允许集合内`);
+      assert.ok(v >= lo && v <= hi, `${v} 不在区间 [${lo}, ${hi}] 内`);
     }
   }
 });
 
-test("pickSpawnValue：min == max 时恒定返回该值", () => {
-  for (const v of SPAWN_ALLOWED) {
+test("pickSpawnValue：min == max 时恒定返回该值（含 1 = 2⁰）", () => {
+  for (const v of [1, 2, 4, 8, 1024]) {
     for (let i = 0; i < 50; i++) assert.equal(pickSpawnValue(v, v), v);
   }
 });
 
-test("spawnCandidates：只返回允许的 2 与 4", () => {
+test("spawnCandidates：返回区间内的全部 2 的幂次（自 1 = 2⁰ 起）", () => {
+  assert.deepEqual(spawnCandidates(1, 4), [1, 2, 4]);
   assert.deepEqual(spawnCandidates(2, 4), [2, 4]);
   assert.deepEqual(spawnCandidates(2, 2), [2]);
-  assert.deepEqual(spawnCandidates(4, 4), [4]);
-  // 越界输入被夹回允许范围
-  assert.deepEqual(spawnCandidates(1, 8), [2, 4]);
-  assert.deepEqual(spawnCandidates(8, 16), []);
+  // 上界不再被限死在 4：8 与 16 也该出现
+  assert.deepEqual(spawnCandidates(8, 16), [8, 16]);
+  // 区间里一个 2 的幂次都没有
+  assert.deepEqual(spawnCandidates(3, 3), []);
+  // 下界越界时夹回 1
+  assert.deepEqual(spawnCandidates(0, 4), [1, 2, 4]);
+});
+
+test("生成区间：下界允许 1，上界远大于原来的 4", () => {
+  assert.equal(SPAWN_MIN_LIMIT, 1, "下界应允许 1（2 的 0 次幂）");
+  assert.ok(SPAWN_MAX_LIMIT > 4, "上界应当远超原来的 4");
+  assert.deepEqual(
+    spawnCandidates(SPAWN_MAX_LIMIT, SPAWN_MAX_LIMIT),
+    [SPAWN_MAX_LIMIT],
+    "上界本身要能取到",
+  );
 });
 
 test("pickSpawnValue：uniform 分布下 2 与 4 各占一半", () => {
