@@ -1630,6 +1630,15 @@ function updateBackendLabel(): void {
   const name = t(b.labelKey);
   const label = b.needsKey || !staticHost ? name : t("backend.remoteSuffix", { label: name });
   const el = $("backend");
+
+  // 代管后端的模型是本站服务端的内部选择：用户既改不了，也不该看到 ——
+  // 展示它只会让人以为那是个可调项，还会把上游选型泄露到 UI 上。
+  // 这与 BackendConfig.managed 的语义一致（它也负责隐藏 Base URL 与 Model ID）。
+  if (b.managed) {
+    el.textContent = label;
+    el.title = t("backend.currentTitleShort", { label });
+    return;
+  }
   el.textContent = `${label} · ${state.cfg.model}`;
   el.title = t("backend.currentTitle", { label, model: state.cfg.model });
 }
@@ -1766,7 +1775,9 @@ function saveApi(): void {
     // 仅存内存，绝不落盘
     apiKey: b.needsKey ? inpKey.value.trim() : "",
   };
-  $("backend").textContent = `${t(b.labelKey)} · ${state.cfg.model}`;
+  // 状态栏的拼法只在 updateBackendLabel 里有一份 —— 之前这里另抄了一遍，
+  // 于是「改了模型但状态栏没跟上」这类不一致迟早出现（函数上方注释早有提醒）
+  updateBackendLabel();
   closeDrawers();
 }
 

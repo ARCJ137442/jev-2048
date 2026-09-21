@@ -163,13 +163,34 @@ export function makeHandler(up: Upstream) {
         console.log(`[${up.label}] ${upstream.status}`);
       }
 
-      res.status(upstream.status);
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.send(text);
+      if (upstream.status === 200) {
+        res.status(200);
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.send(text);
+        return;
+      }
+
+      // 非 200 一律**不透传上游原文** —— 那里面可能带模型名、端点、账号信息，
+      // 直接送到浏览器就等于把上游选型泄露给使用者。原文留在服务端日志备查。
+      console.error(`[${up.label}] ${upstream.status} 上游原文：${text.slice(0, 500)}`);
+      res.status(upstream.status).json({ error: { message: publicError(upstream.status) } });
     } catch (e) {
       res.status(502).json({
         error: { message: `无法连接上游：${(e as Error).message}` },
       });
     }
   };
+}
+
+/**
+ * 免费后端出错时给浏览器看的文案。
+ *
+ * 刻意不含模型名、端点或上游厂商 —— 那些是本站的内部选择。
+ * 但 429 / 402 时保留「额度」字样：前端 `isQuotaError` 除了状态码也会看文案，
+ * 少了它，「额度用尽」就会被笼统地报成「后端不可用」。
+ */
+export function publicError(status: number): string {
+  return status === 429 || status === 402
+    ? "该免费后端的额度已用尽或被限流。请稍后重试，或在「API」设置里改用其他后端。"
+    : "该免费后端暂时不可用。请稍后重试，或在「API」设置里改用其他后端。";
 }
