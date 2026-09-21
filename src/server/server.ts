@@ -408,7 +408,7 @@ server.listen(port, "0.0.0.0", () => {
     [
       "",
       "═".repeat(62),
-      "  JEV × 2048  —  决策仪器已启动",
+      "  2048 × JEV  —  决策仪器已启动",
       "═".repeat(62),
       ...backendLines,
       "",

@@ -420,9 +420,9 @@ const DICT: Record<Lang, Record<string, string>> = {
     "dir.right": "右",
 
     /* ---------- 开发者控制台 ---------- */
-    "dev.spawnFail": "[Jev×2048] 初始方块放置失败，已兜底放置一个",
-    "dev.bootFail": "[Jev×2048] 启动失败：",
-    "dev.bootInfo": "[Jev×2048] 棋盘 {cols}×{rows}　生成 {min}–{max} ({dist})　记忆 {mem}　阈值 {th}",
+    "dev.spawnFail": "[2048×Jev] 初始方块放置失败，已兜底放置一个",
+    "dev.bootFail": "[2048×Jev] 启动失败：",
+    "dev.bootInfo": "[2048×Jev] 棋盘 {cols}×{rows}　生成 {min}–{max} ({dist})　记忆 {mem}　阈值 {th}",
     "dev.memMax": "最大",
   },
 
@@ -808,9 +808,9 @@ const DICT: Record<Lang, Record<string, string>> = {
     "dir.right": "Right",
 
     /* ---------- Developer console ---------- */
-    "dev.spawnFail": "[Jev×2048] Initial block placement failed; fell back to placing one",
-    "dev.bootFail": "[Jev×2048] Startup failed:",
-    "dev.bootInfo": "[Jev×2048] board {cols}×{rows}　spawn {min}–{max} ({dist})　memory {mem}　threshold {th}",
+    "dev.spawnFail": "[2048×Jev] Initial block placement failed; fell back to placing one",
+    "dev.bootFail": "[2048×Jev] Startup failed:",
+    "dev.bootInfo": "[2048×Jev] board {cols}×{rows}　spawn {min}–{max} ({dist})　memory {mem}　threshold {th}",
     "dev.memMax": "max",
   },
 };
