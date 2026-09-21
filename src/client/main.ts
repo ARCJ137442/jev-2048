@@ -71,6 +71,7 @@ import { ConfidenceChart } from "./chart.js";
 import {
   DEFAULT_API,
   DEFAULT_CONTEXT,
+  DEFAULT_CONTEXT_EN,
   DEFAULT_GAME,
   MAX_MEMORY,
   MAX_RETRY,
@@ -231,7 +232,8 @@ function retryPolicy(): RetryPolicy {
 function updateCostUi(): void {
   $("cost").textContent = `$${state.costTotal.toFixed(4)}`;
   const ok = state.history.filter((h) => !h.failed).length;
-  $("avgCost").textContent = ok > 0 ? `$${(state.costTotal / ok).toFixed(4)}` : "—";
+    // 单次调用常常只有十万分之几美元，4 位小数会一律显示成 $0.0000
+  $("avgCost").textContent = ok > 0 ? `$${(state.costTotal / ok).toFixed(8)}` : "—";
 }
 
 function updateStats(): void {
@@ -574,6 +576,9 @@ async function doTurn(): Promise<void> {
 
   let answer: ChoiceAnswer | null = null;
   let latency = 0;
+  // 延迟只测「发出请求 → 收到响应」这一段。turnStart 还包含请求体构建与两手
+  // 之间的 pace 等待，拿它当延迟会把等待时长也算进去，数字就没有意义了。
+  let callStart = turnStart;
   let tokens = 0;
   let move: Direction | null = null;
   let noteKey = "";
@@ -584,6 +589,7 @@ async function doTurn(): Promise<void> {
   let error: string | undefined;
 
   try {
+    callStart = performance.now();
     const res = await callJev(
       state.cfg,
       requestBody.state,
@@ -596,7 +602,7 @@ async function doTurn(): Promise<void> {
         },
       },
     );
-    latency = performance.now() - turnStart;
+    latency = performance.now() - callStart;
     tokens = res.inputTokens;
     response = res.raw;
 
@@ -624,7 +630,7 @@ async function doTurn(): Promise<void> {
       showQuotaModal(error);
       pushLog({
         turn: state.turn + 1, move: legal[0], top: 0, bottom: 0, median: 0, confidence: 0,
-        latencyMs: Math.round(performance.now() - turnStart), tokens: 0,
+        latencyMs: Math.round(performance.now() - callStart), tokens: 0,
         reason: t("over.quotaBody", { msg: error }),
         coerced: false, belowThreshold: undefined, failed: true,
         request: requestBody, response: null, at,
@@ -636,7 +642,7 @@ async function doTurn(): Promise<void> {
 
     pushLog({
       turn: state.turn + 1, move: legal[0], top: 0, bottom: 0, median: 0, confidence: 0,
-      latencyMs: Math.round(performance.now() - turnStart), tokens: 0,
+      latencyMs: Math.round(performance.now() - callStart), tokens: 0,
       reason: error, coerced: false, belowThreshold: undefined, failed: true,
       request: requestBody, response: null, at,
     });
@@ -1587,17 +1593,20 @@ function resetGameSettings(): void {
 }
 
 function resetStrategySettings(): void {
+  // 按**当前界面语言**取出厂默认值 —— 否则英文用户点「恢复默认」会拿回
+  // 一份中文提示词，白填了这个语言开关
+  const ctx = getLang() === "en" ? DEFAULT_CONTEXT_EN : DEFAULT_CONTEXT;
   Object.assign(store.game, {
     strategy: DEFAULT_GAME.strategy,
     threshold: DEFAULT_GAME.threshold,
     memory: DEFAULT_GAME.memory,
   });
-  Object.assign(store.context, DEFAULT_CONTEXT);
+  Object.assign(store.context, ctx);
   save(store);
 
-  $<HTMLTextAreaElement>("ruleDesc").value = DEFAULT_CONTEXT.ruleDesc;
-  $<HTMLTextAreaElement>("hintText").value = DEFAULT_CONTEXT.strategyHint;
-  $<HTMLInputElement>("inpCons").checked = DEFAULT_CONTEXT.consequences;
+  $<HTMLTextAreaElement>("ruleDesc").value = ctx.ruleDesc;
+  $<HTMLTextAreaElement>("hintText").value = ctx.strategyHint;
+  $<HTMLInputElement>("inpCons").checked = ctx.consequences;
   syncGameUi();
 }
 

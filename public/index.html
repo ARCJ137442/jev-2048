@@ -308,9 +308,22 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   .dec{flex:1 1 190px;min-width:190px;min-height:104px;padding:9px}
   .chartbox{flex:0 0 168px;min-width:168px}
 
-  /* 概览行在移动端只保留最关键的三个，其余让位给决策面板 */
-  .stats .stat:nth-child(2),
-  .stats .stat:nth-child(4){display:none}
+  /* 计分板在窄屏改**竖排**：一行一项、标签靠左数值靠右。
+     早先的做法是直接 display:none 掉次要项，但那样玩家就看不到 Best / Max
+     了 —— 分数类信息藏起来比占点高度更糟。 */
+  .stats{
+    display:grid;
+    grid-template-columns:1fr;
+    align-self:flex-start;
+  }
+  .stat{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    padding:3px 9px;
+  }
+  .stat .v{margin-top:0}
 
   .hint{display:none}
   .pace{margin-top:7px}
@@ -343,7 +356,7 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   h1{font-size:15px}
   .stat .v{font-size:13.5px}
   .stat .k{font-size:8.5px}
-  .stats .stat:nth-child(3){display:none}  /* 只剩 Score / Max / Best Max */
+  /* 竖排后这里不再需要隐藏任何一项 */
   .dec{flex-basis:150px;min-width:150px}
   .chartbox{flex-basis:132px;min-width:132px}
   .bar{grid-template-columns:15px 1fr 36px;gap:6px}
