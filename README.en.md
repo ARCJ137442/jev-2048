@@ -174,7 +174,7 @@ Sections are split by **"whose input does this affect"**, not by feature:
 
 | Section | Affects Jev's input | Affects move execution | Contents |
 |---|:-:|:-:|---|
-| "Game" | ✗ | ✗ | Board width/height, spawn value range, spawn distribution, initial tile count, animations |
+| "Game" | ✗ | ✗ | Board width/height, spawn value range, spawn distribution, initial block count, animations |
 | "Strategy › Context" | **✓** | ✗ | Rule description, strategy hint, consequence prediction, memory depth |
 | "Strategy › Rules" | ✗ | **✓** | Decision strategy, confidence threshold |
 | "API" | ✗ | ✗ | Backend, key, auto-retry |

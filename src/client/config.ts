@@ -109,7 +109,7 @@ export const DEFAULT_CONTEXT: ContextSettings = {
 每次移动，所有方块都朝该方向尽量滑到底；同一行或同一列中相邻且数值相同的两个方块相撞时，会合并成一个，数值为二者之和，得分随之增加。
 每次移动后，棋盘上会补入新的方块。当任何方向都无法再移动时，游戏结束。
 
-目标是让棋盘上出现尽可能大的方块，并累积尽可能高的分数。`,
+目标是合并出尽可能大的方块，并累积尽可能高的分数。`,
   strategyHint: `策略要点：
 - 保持棋盘单调（数值从一角向另一角递减）
 - 把最大方块固定在角落里
@@ -126,15 +126,15 @@ export const DEFAULT_CONTEXT: ContextSettings = {
  * 面板主动触发才应用。
  */
 export const DEFAULT_CONTEXT_EN: ContextSettings = {
-  ruleDesc: `You are playing 2048. The board is a rectangular grid where 0 marks an empty cell and every other number is a tile value (a power of two).
+  ruleDesc: `You are playing 2048. The board is a rectangular grid where 0 marks an empty cell and every other number is a block value (a power of two).
 
-On each move, all tiles slide as far as possible in that direction; when two tiles of equal value collide in the same row or column, they merge into one tile whose value is their sum, and the score increases accordingly.
-New tiles are added to the board after each move. The game ends when no direction can move any tile.
+On each move, all blocks slide as far as possible in that direction; when two blocks of equal value collide in the same row or column, they merge into one block whose value is their sum, and the score increases accordingly.
+New blocks are added to the board after each move. The game ends when no direction can move any block.
 
-The goal is to build the largest possible tile on the board and accumulate the highest possible score.`,
+The goal is to merge into the largest possible block and accumulate the highest possible score.`,
   strategyHint: `Strategy notes:
 - Keep the board monotonic (values decreasing from one corner toward the opposite one)
-- Anchor the largest tile in a corner
+- Anchor the largest block in a corner
 - Avoid switching move directions too often
 - Keep enough empty cells available`,
   consequences: true,
