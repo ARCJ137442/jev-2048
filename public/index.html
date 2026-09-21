@@ -534,9 +534,8 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     </div>
 
     <div class="notice-line">
-      <b style="color:var(--accent)" data-i18n="incompat.force">强行加载</b><span data-i18n="incompat.salvage">会尽力从这份数据里抢救出可用的部分： 棋盘与分数通常没问题，读不懂的字段会被丢弃并如实告知。</span><br data-i18n="incompat.order">
-      建议顺序：先「导出旧数据」留底，再决定强行加载还是重置。
-    </div>
+      <b style="color:var(--accent)" data-i18n="incompat.force">强行加载</b><span data-i18n="incompat.salvage">会尽力从这份数据里抢救出可用的部分： 棋盘与分数通常没问题，读不懂的字段会被丢弃并如实告知。</span><br>
+      <span data-i18n="incompat.order">建议顺序：先「导出旧数据」留底，再决定强行加载还是重置。</span></div>
 
     <div class="actions-wrap">
       <button id="bIncompatExport" data-i18n="incompat.export">⬇ 导出旧数据</button>
@@ -553,9 +552,8 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
     <h2 data-i18n="quota.title">额度不足</h2>
 
     <div class="warn">
-      <b data-i18n="quota.desc">当前后端的调用额度已用尽或被限流。</b><br data-i18n="quota.notNetwork">
-      这通常不是网络问题，重试也不会恢复 —— 换个后端或用自己的 Key 即可继续。
-    </div>
+      <b data-i18n="quota.desc">当前后端的调用额度已用尽或被限流。</b><br>
+      <span data-i18n="quota.notNetwork">这通常不是网络问题，重试也不会恢复 —— 换个后端或用自己的 Key 即可继续。</span></div>
 
     <div class="field">
       <label data-i18n="quota.serverReturned">服务端返回</label>
@@ -566,9 +564,8 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
       <label data-i18n="quota.whatCanDo">可以怎么做</label>
       <div class="desc" style="margin-bottom:0;line-height:1.75">
         <span data-i18n="quota.step1">1. 切到</span> <b data-i18n="quota.gatewayBold">Vercel AI Gateway 直连</b><span data-i18n="quota.gatewayHint">，填自己的 API Key（推荐，额度归你掌控）</span><br>
-        <span data-i18n="quota.step2">2. 换用</span> <b data-i18n="quota.official">TypeSafe 官方</b> <span data-i18n="quota.or">或</span> <b>OpenRouter</b> <span data-i18n="quota.backendWord">后端</span><br data-i18n="quota.step3">
-        3. 稍后再试 —— 如果是共享额度的免费试用，等它恢复
-      </div>
+        <span data-i18n="quota.step2">2. 换用</span> <b data-i18n="quota.official">TypeSafe 官方</b> <span data-i18n="quota.or">或</span> <b>OpenRouter</b> <span data-i18n="quota.backendWord">后端</span><br>
+        <span data-i18n="quota.step3">3. 稍后再试 —— 如果是共享额度的免费试用，等它恢复</span></div>
     </div>
 
     <div class="actions-wrap">
@@ -824,9 +821,8 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
   </header>
   <div class="body">
     <div class="warn">
-      <b data-i18n="api.keySafety">密钥安全</b><br data-i18n="api.keyNote">
-      只有选「直连」类后端时才需要填写。密钥仅存于当前页面的内存，刷新即清除，不会写入本地存储。
-    </div>
+      <b data-i18n="api.keySafety">密钥安全</b><br>
+      <span data-i18n="api.keyNote">只有选「直连」类后端时才需要填写。密钥仅存于当前页面的内存，刷新即清除，不会写入本地存储。</span></div>
 
     <div class="field"><label data-i18n="quota.backendWord">后端</label><select id="selBackend"></select></div>
     <div class="field"><label>API Key</label><input type="password" id="inpKey" autocomplete="off"></div>
