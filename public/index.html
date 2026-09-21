@@ -145,6 +145,13 @@ footer .spacer{flex:1}
   transition:transform .24s cubic-bezier(.3,.9,.35,1);z-index:101;display:flex;flex-direction:column}
 .drawer.show{transform:none}
 .drawer.wide{width:min(620px,96vw)}
+/* 窄屏下抽屉占满全宽、把遮罩层整个盖住，点画面空白处退不出来，
+   只能翻到底部找「完成」。补一个显式的关闭按钮。 */
+.drawer-close{position:absolute;top:12px;right:14px;z-index:2;
+  width:34px;height:34px;padding:0;border-radius:var(--r);
+  display:none;align-items:center;justify-content:center;
+  font:400 15px/1 var(--sans);color:var(--ink-3);background:var(--panel-2)}
+.drawer-close:hover:not(:disabled){background:#26221e;color:var(--ink);transform:none}
 .drawer > header{padding:15px 18px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:10px}
 .drawer > header svg{width:17px;height:17px;color:var(--accent);flex-shrink:0;margin-top:2px}
 .drawer > header h2{font-size:14px;font-weight:600}
@@ -336,6 +343,9 @@ button.danger:hover:not(:disabled){background:rgba(248,113,113,.12);border-color
 
   /* 抽屉占满宽度，底部按钮固定在触手可及的位置 */
   .drawer,.drawer.wide{width:100%;max-width:100%;border-left:none}
+  /* 全宽抽屉盖住了遮罩 —— 显示右上角的关闭按钮 */
+  .drawer-close{display:flex}
+  .drawer > header{padding-right:56px}
   .drawer .body{padding:14px 15px}
   .drawer > footer{padding:11px 15px}
   .drawer > footer button{flex:1}

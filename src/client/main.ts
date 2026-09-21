@@ -1121,6 +1121,28 @@ function closeDrawers(): void {
   scrim.classList.remove("show");
 }
 
+/**
+ * 给每个抽屉右上角注入一个关闭按钮。
+ *
+ * 宽屏下抽屉是侧栏，点旁边露出的遮罩即可退出；**窄屏下抽屉占满全宽**，
+ * 遮罩被完全盖住、点不到，用户只能翻到抽屉底部去找「完成」——
+ * 这不是一个能被发现的退出方式。
+ *
+ * title 走 `data-i18n-title`，由 applyDom 负责跟随语言。
+ */
+function addDrawerCloseButtons(): void {
+  for (const el of document.querySelectorAll<HTMLElement>(".drawer")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "drawer-close";
+    btn.textContent = "✕";
+    btn.dataset.i18nTitle = "ui.close";
+    btn.setAttribute("aria-label", "close");
+    btn.addEventListener("click", () => closeDrawers());
+    el.appendChild(btn);
+  }
+}
+
 /* ═══════════ 游戏设置 ═══════════ */
 
 function syncGameUi(): void {
@@ -2044,6 +2066,7 @@ function boot(): void {
   // 随后的 applyDom() 负责把静态文案刷成当前语言。
   setLang(store.lang);
   bindLanguage();
+  addDrawerCloseButtons();
   onLangChange(() => {
     store.lang = getLang();
     save(store);

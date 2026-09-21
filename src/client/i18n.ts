@@ -58,6 +58,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "nav.archiveTitle": "导入 / 导出存档：对局、策略、API 设置、调用日志",
     "nav.githubTitle": "在 GitHub 上查看源码 · 欢迎 star 与 issue",
     "nav.langTitle": "界面语言 / Interface language",
+    "ui.close": "关闭",
     "nav.langName": "中文",
 
     /* ---------- 棋盘下方控制条 ---------- */
@@ -441,6 +442,7 @@ const DICT: Record<Lang, Record<string, string>> = {
     "nav.archiveTitle": "Import / export: game, strategy, API settings, call log",
     "nav.githubTitle": "View the source on GitHub · stars and issues welcome",
     "nav.langTitle": "界面语言 / Interface language",
+    "ui.close": "Close",
     "nav.langName": "English",
 
     /* ---------- Controls under the board ---------- */
