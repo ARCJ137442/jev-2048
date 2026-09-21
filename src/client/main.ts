@@ -1770,6 +1770,9 @@ function onBackendSwitch(): void {
  * 如果打开抽屉也走默认值路径，用户刚改好的模型会在下次打开时被悄悄冲掉。
  */
 function onApiDrawerOpen(): void {
+  // 双保险：语言切换时 relanguage() 已经重建过，这里再建一次，
+  // 这样无论用户是「先切语言再开抽屉」还是「开着抽屉切语言」都能对上
+  fillBackendOptions();
   const b = BACKENDS[state.cfg.provider];
   selBackend.value = state.cfg.provider;
   $<HTMLInputElement>("inpBase").value = state.cfg.base;
