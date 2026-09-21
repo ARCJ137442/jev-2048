@@ -1,4 +1,4 @@
-# Jev × 2048
+# 2048 × Jev
 
 |**简体中文** | [English](README.en.md)|
 |:-:|:-:|
