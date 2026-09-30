@@ -57,12 +57,14 @@ export function bestLegalMove(
  * @param legal      当前合法方向
  * @param strategy   贪心 / 概率采样 / 置信度门槛
  * @param threshold  置信度门槛（仅 threshold 策略使用）
+ * @param rand       采样用的随机源（默认 Math.random，测试时可注入）
  */
 export function resolveDecision(
   answer: ChoiceAnswer,
   legal: Direction[],
   strategy: Strategy,
   threshold: number,
+  rand: () => number = Math.random,
 ): Resolution {
   const ranked = rankProbabilities(answer);
   /** 同时给出译文与 key —— 译文供当前渲染，key 供日后重新翻译 */
@@ -86,18 +88,25 @@ export function resolveDecision(
   const belowThreshold = strategy === "threshold" && threshold > 0 && topProb < threshold;
 
   // 概率采样：只在合法方向里按归一化概率轮盘赌
+  //
+  // `coerced` 的含义是「Jev 首选非法 → 取次优合法」（见 LogRecord.coerced），
+  // 只取决于首选是否合法，与本次抽到哪个方向无关。
+  // 按分布抽到非首选方向是采样的正常结果，不是纠正 —— 若把它记成 coerced，
+  // 日志里的警示行会混入大量正常采样，「首选非法」这一测量就被污染了。
   if (strategy === "sample") {
     const pool = ranked.filter(([d]) => legalSet.has(d));
     if (pool.length > 0) {
+      const coerced = !legalSet.has(topMove);
       const total = pool.reduce((s, [, p]) => s + p, 0) || 1;
-      let r = Math.random() * total;
+      let r = rand() * total;
       for (const [move, p] of pool) {
         r -= p;
         if (r <= 0) {
-          return { move, ...mk("reason.sampled"), coerced: move !== topMove, belowThreshold };
+          return { move, ...mk("reason.sampled"), coerced, belowThreshold };
         }
       }
-      return { move: pool[0][0], ...mk("reason.sampled"), coerced: false, belowThreshold };
+      // 浮点误差兜底：r 可能停在极小正数，取合法池首项
+      return { move: pool[0][0], ...mk("reason.sampled"), coerced, belowThreshold };
     }
   }
 
